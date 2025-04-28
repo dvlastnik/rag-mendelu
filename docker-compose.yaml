@@ -1,0 +1,23 @@
+networks:
+  net:
+    driver: bridge
+
+services:
+  text-embedding-api:
+    build: ./text_embedding_api
+    container_name: text-embedding-api
+    ports:
+      - 8000:8000
+
+  chromadb:
+    image: chromadb/chroma:1.0.7.dev25
+    container_name: chromadb
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=False
+      - LOG_LEVEL=debug
+    ports:
+      - 8001:8000
+    networks:
+      - net
