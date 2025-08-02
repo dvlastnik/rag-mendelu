@@ -6,22 +6,34 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+from enum import Enum
+
+class ETLState(Enum):
+    NOT_STARTED = 1
+    EXTRACTED = 2
+    TRANSFORMED = 3
+    LOADED = 4
+    FAILED = 5
+    FILE_NOT_FOUND = 6
+
 class BaseEtl(ABC):
     def __init__(self, filepath: str):
         super().__init__()
         self.documents = []
         self.df = None
         self.filepath = filepath
+        self.state = ETLState.NOT_STARTED
 
     def extract(self) -> None:
         try:
             self.df = pd.read_csv(self.filepath)
+            self.state = ETLState.EXTRACTED
         except FileNotFoundError:
-            logger.exception(f"File was not found: {self.filepath}")
             self.df = None
+            self.state = ETLState.FAILED
         except Exception as e:
-            logger.exception(f"Error occurred during extraction: {e}")
             self.df = None
+            self.state = ETLState.FILE_NOT_FOUND
 
     @abstractmethod
     def transform(self):
@@ -32,28 +44,43 @@ class BaseEtl(ABC):
     
     def load(self) -> None:
         # TODO: sending to database
-        logger.info("Previewing transformed data (first 5 rows):")
+        total_rows = len(self.df)
+
+        print("\n🟩 First 5 rows:")
         print(self.df.head(5).to_string(index=True))
 
-    def run(self) -> None:
-        self.extract()
-        if self.df is None:
-            logger.error("Extraction failed. Stopping ETL")
-            return
-        
-        try:
-            logging.debug(f"Transforming data for {self.filepath}")
-            self.transform()
-            logging.debug(f"Transformation for {self.filepath} complete")
-        except Exception as e:
-            logging.exception(f"Error during transformation: {e}")
-            traceback.print_exc()
-            return
+        if total_rows > 10:
+            middle_start = total_rows // 2 - 2
+            middle_end = middle_start + 5
+            print("\n🟨 Middle 5 rows:")
+            print(self.df.iloc[middle_start:middle_end].to_string(index=True))
+        else:
+            print("\n🟨 Not enough rows for middle preview.")
 
-        try:
-            logging.debug("Loading data...")
-            self.load()
-            logging.debug("Loading data done")
-        except Exception as e:
-            logging.exception(f"Error during loading: {e}")
-            traceback.print_exc()
+        print("\n🟥 Last 5 rows:")
+        print(self.df.tail(5).to_string(index=True))
+        self.state = ETLState.LOADED
+
+    def run(self) -> None:
+        while True:
+            match self.state:
+                case ETLState.NOT_STARTED:
+                    self.extract()
+                case ETLState.EXTRACTED:
+                    logger.info("Extraction done")
+                    self.transform()
+                case ETLState.TRANSFORMED:
+                    logger.info("Transformation done")
+                    self.load()
+                case ETLState.LOADED:
+                    logger.info("Loading done")
+                    break
+                case ETLState.FILE_NOT_FOUND:
+                    logger.error(f"File was not found for path: {self.filepath}")
+                    break
+                case ETLState.FAILED:
+                    logger.error(f"ETL failed")
+                    break
+                case _:
+                    logger.warning("State machine in default case")
+                    break

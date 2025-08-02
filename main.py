@@ -8,7 +8,7 @@ import argparse
 import os
 
 from TextEmbeddingService import TextEmbeddingService
-from etl.MzdyCzNaceRocniCsuEtl import MzdyCzNaceRocniCsuEtl
+from etl.Mzdr1DataEtl import Mzdr1DataEtl
 from utils.logging_config import setup_logging
 
 setup_logging()
@@ -115,8 +115,8 @@ def main():
     #         chroma_service=chroma_service
     #     )
 
-    mzdy_cz = MzdyCzNaceRocniCsuEtl(filepath="data/mzdy_cz_nace_rocni_csu.csv")
-    mzdy_cz.run()
+    etl = Mzdr1DataEtl(filepath="data/MZDR_1_data.csv")
+    etl.run()
 
 if __name__ == '__main__':
     main()
