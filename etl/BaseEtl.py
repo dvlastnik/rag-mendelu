@@ -2,19 +2,10 @@ from abc import ABC, abstractmethod
 import logging
 import traceback
 import pandas as pd
+from etl.EtlState import ETLState
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
-
-from enum import Enum
-
-class ETLState(Enum):
-    NOT_STARTED = 1
-    EXTRACTED = 2
-    TRANSFORMED = 3
-    LOADED = 4
-    FAILED = 5
-    FILE_NOT_FOUND = 6
 
 class BaseEtl(ABC):
     def __init__(self, filepath: str):
