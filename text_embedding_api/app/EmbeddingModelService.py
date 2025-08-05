@@ -1,6 +1,7 @@
 from sentence_transformers import SentenceTransformer
+from BaseEmbeddingModelService import BaseEmbeddingModelService
 
-class EmbeddingModelService:
+class EmbeddingModelService(BaseEmbeddingModelService):
     _instance = None
 
     def __new__(cls):
