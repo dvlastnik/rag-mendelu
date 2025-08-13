@@ -1,5 +1,10 @@
 from enum import Enum
 import requests
+from typing import Dict, List
+
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class HttpMethod(Enum):
     GET = "GET"
@@ -16,19 +21,25 @@ class EmbeddingResponse:
         return f"Uuid: {self.uuid}, Embedding: {self.embedding}"
 
     @staticmethod
-    def from_dict(data: dict):
+    def from_dict(data: Dict) -> 'EmbeddingResponse':
         if 'uuid' not in data.keys():
             raise ValueError(f"Uuid is missing in provided dictionary: {data}")
         if 'embeddings' not in data.keys():
             raise ValueError(f"Embeddings is missing in provided dictionary: {data}")
         return EmbeddingResponse(uuid=data.get('uuid', str), embedding=data.get('embeddings', list))
+    
+    @staticmethod
+    def from_list_of_dicts(data: List[Dict]) -> List['EmbeddingResponse']:
+        result: List['EmbeddingResponse'] = []
+
+        for d in data['data']:
+            result.append(EmbeddingResponse.from_dict(d))
+
+        return result
 
 class TextEmbeddingService:
-    def __init__(self, url: str):
-        if ':' not in url:
-            raise ValueError(f"Not a valid url address: {url}")
-        
-        self.url = url
+    def __init__(self, ip: str, port: int):
+        self.url = "http://" + ip + ":" + str(port)
 
     def _make_request(self, method: HttpMethod, endpoint: str, params=None, data=None, headers=None, json=None, timeout=10):
         try:
@@ -47,27 +58,49 @@ class TextEmbeddingService:
             print(f"Request failed: {e}")
             return None
 
-    def get_embedding_with_uuid(self, data: list[str] | str) -> list[EmbeddingResponse]:
-        texts = {}
-        if isinstance(data, list):
-            texts = {
-                'texts': data
-            }
-        elif isinstance(data, str):
-            texts = {
-                'texts': [data]
-            }
+    def _chunks(self, array: list, n):
+        """Yield successive n-sized chunks from lst."""
+        for i in range(0, len(array), n):
+            yield array[i:i + n]
+
+    def embed_text_and_return_result(self, json_data: Dict) -> List[EmbeddingResponse]:
         response = self._make_request(
             method=HttpMethod.POST,
             endpoint='/embed-text',
-            json=texts
+            json=json_data
         )
 
-        result: list[EmbeddingResponse] = []
-        for text in response.get('data'):
-            result.append(
-                EmbeddingResponse.from_dict(text)
-            )
+        return EmbeddingResponse.from_list_of_dicts(response)
+
+    def get_embedding_with_uuid(self, data: List[str] | str, chunk_size=250) -> List[EmbeddingResponse]:
+        result: List[EmbeddingResponse] = []
+
+        if chunk_size is None or chunk_size == 0:
+            texts = {}
+
+            if isinstance(data, list):
+                texts = {
+                    'texts': data
+                }
+            elif isinstance(data, str):
+                texts = {
+                    'texts': [data]
+                }
+
+            result = self.embed_text_and_return_result(texts)
+        else:
+            for i, chunk in enumerate(self._chunks(data, chunk_size)):
+                try:
+                    logger.info(f"{i}. chunk processed")
+
+                    temp_arr = self.embed_text_and_return_result({
+                        "texts": chunk
+                    })
+
+                    result.extend(temp_arr)
+
+                except Exception as e:
+                    logger.error(f"Batch failed: {e}")
 
         return result
     

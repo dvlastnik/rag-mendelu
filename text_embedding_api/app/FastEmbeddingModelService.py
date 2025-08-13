@@ -1,3 +1,4 @@
+from typing import List
 from fastembed.embedding import TextEmbedding
 from BaseEmbeddingModelService import BaseEmbeddingModelService
 
@@ -25,7 +26,9 @@ class FastEmbedEmbeddingService(BaseEmbeddingModelService):
         self.model_name = model_name
         self.model = TextEmbedding(model_name=model_name)
 
-    def encode(self, text: str):
+    def encode(self, text: List[str] | str):
+        if isinstance(text, list):
+            return self.model.embed(text)
         return list(self.model.embed([text]))[0]
 
     def get_installed_models(self):

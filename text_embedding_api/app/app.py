@@ -39,16 +39,14 @@ async def embed_text(request: EmbedTextRequest, embed_model: BaseEmbeddingModelS
     if not request.texts:
         raise HTTPException(status_code=400, detail="No text to embed provided")
     
-    data = []
+    texts = [t for t in request.texts if t.strip()]
     
-    for text in request.texts:
-        if text != '':
-            data.append(
-                EmbedText(
-                    uuid=str(uuid.uuid4()),
-                    embeddings=embed_model.encode(text)
-                )
-            )
+    embeddings = embed_model.encode(texts)
+
+    data = [
+        EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
+        for embedding in embeddings
+    ]
 
     return EmbedTextResponse(data=data)
 

@@ -22,7 +22,7 @@ class EmbeddingModelService(BaseEmbeddingModelService):
         if model_name not in self.installed_models:
             self.installed_models.append(model_name)
 
-    def encode(self, texts: str):
+    def encode(self, texts):
         return self.model.encode(texts, normalize_embeddings=True)
     
     def get_installed_models(self) -> list[str]:

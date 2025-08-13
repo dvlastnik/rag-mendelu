@@ -10,7 +10,7 @@ class BaseEmbeddingModelService(ABC):
         pass
 
     @abstractmethod
-    def encode(self, text: str):
+    def encode(self, text: List[str] | str):
         pass
 
     @abstractmethod

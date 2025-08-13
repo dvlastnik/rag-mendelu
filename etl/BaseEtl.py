@@ -1,9 +1,14 @@
 from abc import ABC, abstractmethod
-import logging
-import traceback
+import pickle
+from typing import List
 import pandas as pd
+
+from database.ChromaDbRepository import ChromaDbRepository
 from etl.EtlState import ETLState
 from utils.logging_config import get_logger
+from TextEmbeddingService import TextEmbeddingService
+from database.base.Document import Document
+
 
 logger = get_logger(__name__)
 
@@ -14,6 +19,18 @@ class BaseEtl(ABC):
         self.df = None
         self.filepath = filepath
         self.state = ETLState.NOT_STARTED
+
+        self.chroma_db_repository = ChromaDbRepository(ip="localhost", port=8001)
+        self.chroma_db_repository.connect()
+
+    def _chunks(self, array: list, n):
+        """Yield successive n-sized chunks from lst."""
+        for i in range(0, len(array), n):
+            yield array[i:i + n]
+
+    @abstractmethod
+    def _row_to_document(self, row) -> Document:
+        raise NotImplementedError("Method ._row_to_document() has to be implemented in subclass.")
 
     def extract(self) -> None:
         try:
@@ -33,26 +50,33 @@ class BaseEtl(ABC):
         """
         raise NotImplementedError("Method .transform() has to be implemented in subclass.")
     
-    def load(self) -> None:
-        # TODO: sending to database
-        total_rows = len(self.df)
+    def load(self, embedding_service: TextEmbeddingService) -> None:
+        documents: List[Document] = self.df.apply(self._row_to_document, axis=1).tolist()
+        texts = [doc.text for doc in documents]
 
-        print("\n🟩 First 5 rows:")
-        print(self.df.head(5).to_string(index=True))
+        embeddings_response = embedding_service.get_embedding_with_uuid(texts, chunk_size=200)
 
-        if total_rows > 10:
-            middle_start = total_rows // 2 - 2
-            middle_end = middle_start + 5
-            print("\n🟨 Middle 5 rows:")
-            print(self.df.iloc[middle_start:middle_end].to_string(index=True))
-        else:
-            print("\n🟨 Not enough rows for middle preview.")
+        for doc, embed_text in zip(documents, embeddings_response):
+            doc.embedding = embed_text.embedding
+            doc.id = embed_text.uuid
+        
+        for i, doc in enumerate(self._chunks(documents, 500)):
+            logger.info(f"{i}. chunk inserted")
 
-        print("\n🟥 Last 5 rows:")
-        print(self.df.tail(5).to_string(index=True))
+            result = self.chroma_db_repository.insert(doc)
+            if not result.success:
+                logger.error(result.message)
+                self.state = ETLState.FAILED
+                return
+
+        check_db_data = self.chroma_db_repository.check_if_data_were_inserted()
+        if not check_db_data.success:
+            logger.error(result.message)
+            self.state = ETLState.FAILED
+            return
         self.state = ETLState.LOADED
 
-    def run(self) -> None:
+    def run(self, embedding_service: TextEmbeddingService) -> None:
         while True:
             match self.state:
                 case ETLState.NOT_STARTED:
@@ -62,7 +86,7 @@ class BaseEtl(ABC):
                     self.transform()
                 case ETLState.TRANSFORMED:
                     logger.info("Transformation done")
-                    self.load()
+                    self.load(embedding_service)
                 case ETLState.LOADED:
                     logger.info("Loading done")
                     break

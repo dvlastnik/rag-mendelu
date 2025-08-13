@@ -7,4 +7,4 @@ from database.base.Document import Document
 class DbOperationResult:
     success: bool
     message: Optional[str] = None
-    data: Optional[List[Document]]
+    data: Optional[List[Document]] = None

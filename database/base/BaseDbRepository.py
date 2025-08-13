@@ -15,7 +15,11 @@ class BaseDbRepository(ABC):
         pass
 
     @abstractmethod
-    def search(self) -> DbOperationResult:
+    def search(self, text: str) -> DbOperationResult:
+        pass
+
+    @abstractmethod
+    def check_if_data_were_inserted(self) -> DbOperationResult:
         pass
 
     @abstractmethod
