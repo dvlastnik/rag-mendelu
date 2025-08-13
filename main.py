@@ -7,7 +7,8 @@ import logging
 import argparse
 import os
 
-from TextEmbeddingService import TextEmbeddingService
+from database.ChromaDbRepository import ChromaDbRepository
+from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 from etl.Mzdr1DataEtl import Mzdr1DataEtl
 from utils.logging_config import setup_logging
 
@@ -114,9 +115,14 @@ def main():
     #         embedding_service=embedding_service,
     #         chroma_service=chroma_service
     #     )
-
-    etl = Mzdr1DataEtl(filepath="data/MZDR_1_data.csv")
-    etl.run()
+    embedding_service = TextEmbeddingService("localhost", 8000)
+    question = "Průměrný evidenční počet zaměstnanců přepočtený (tis. osob) v roce 2000?"
+    embed_text = embedding_service.get_embedding_with_uuid(question, chunk_size=None)
+    
+    chroma = ChromaDbRepository(ip="localhost", port=8001)
+    chroma.connect(create_collection=False)
+    result = chroma.search(text=None, text_embedded=embed_text[0].embedding)
+    print(result)
 
 if __name__ == '__main__':
     main()

@@ -11,11 +11,11 @@ class BaseDbRepository(ABC):
         super().__init__()
 
     @abstractmethod
-    def connect(self) -> DbOperationResult:
+    def connect(self, create_collection: bool) -> DbOperationResult:
         pass
 
     @abstractmethod
-    def search(self, text: str) -> DbOperationResult:
+    def search(self, text: str | List[str], text_embedded: List[int] | List[List[int]] | None=None, n_results: int=3) -> DbOperationResult:
         pass
 
     @abstractmethod

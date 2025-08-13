@@ -3,6 +3,7 @@ import requests
 from typing import Dict, List
 
 from utils.logging_config import get_logger
+from utils.utils import Utils
 
 logger = get_logger(__name__)
 
@@ -58,11 +59,6 @@ class TextEmbeddingService:
             print(f"Request failed: {e}")
             return None
 
-    def _chunks(self, array: list, n):
-        """Yield successive n-sized chunks from lst."""
-        for i in range(0, len(array), n):
-            yield array[i:i + n]
-
     def embed_text_and_return_result(self, json_data: Dict) -> List[EmbeddingResponse]:
         response = self._make_request(
             method=HttpMethod.POST,
@@ -72,7 +68,7 @@ class TextEmbeddingService:
 
         return EmbeddingResponse.from_list_of_dicts(response)
 
-    def get_embedding_with_uuid(self, data: List[str] | str, chunk_size=250) -> List[EmbeddingResponse]:
+    def get_embedding_with_uuid(self, data: List[str] | str, chunk_size=None) -> List[EmbeddingResponse]:
         result: List[EmbeddingResponse] = []
 
         if chunk_size is None or chunk_size == 0:
@@ -89,7 +85,7 @@ class TextEmbeddingService:
 
             result = self.embed_text_and_return_result(texts)
         else:
-            for i, chunk in enumerate(self._chunks(data, chunk_size)):
+            for i, chunk in enumerate(Utils.chunks(data, chunk_size)):
                 try:
                     logger.info(f"{i}. chunk processed")
 

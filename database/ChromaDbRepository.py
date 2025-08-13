@@ -1,5 +1,6 @@
 from typing import List
 import chromadb
+from chromadb.config import Settings
 
 from database.base.Document import Document
 from database.base.BaseDbRepository import BaseDbRepository
@@ -39,9 +40,12 @@ class ChromaDbRepository(BaseDbRepository):
 
         return self.collection
 
-    def connect(self):
-        self.client = chromadb.HttpClient(host=self.ip, port=self.port)
-        self.collection = self._create_collection(collection_name=self.COLLECTION_NAME, metadata=self.METADATA)
+    def connect(self, create_collection=True):
+        self.client = chromadb.HttpClient(host=self.ip, port=self.port, settings=Settings(anonymized_telemetry=False))
+        if create_collection:
+            self.collection = self._create_collection(collection_name=self.COLLECTION_NAME, metadata=self.METADATA)
+        else:
+            self.collection = self.get_collection(self.COLLECTION_NAME)
 
     def close(self):
         return super().close()
@@ -73,8 +77,26 @@ class ChromaDbRepository(BaseDbRepository):
     def delete(self, ids):
         return super().delete(ids)
     
-    def search(self, text):
-        pass
+    def search(self, text, text_embedded, n_results=3):
+        try:
+            results = None
+
+            if text_embedded is not None:
+                results = self.collection.query(
+                    query_embeddings=text_embedded,
+                    n_results=n_results
+                )
+
+            else:
+                results = self.collection.query(
+                    query_texts=text,
+                    n_results=n_results
+                )
+
+            results = Document.from_chromadb_result(results)
+            return DbOperationResult(success=True, data=results)
+        except Exception as e:
+            return DbOperationResult(success=False, message=f"Error during search at ChromaDbRepository: {e}")
 
     def check_if_data_were_inserted(self):
         data = self.collection.get()

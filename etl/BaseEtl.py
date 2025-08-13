@@ -6,8 +6,9 @@ import pandas as pd
 from database.ChromaDbRepository import ChromaDbRepository
 from etl.EtlState import ETLState
 from utils.logging_config import get_logger
-from TextEmbeddingService import TextEmbeddingService
+from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 from database.base.Document import Document
+from utils.utils import Utils
 
 
 logger = get_logger(__name__)
@@ -22,11 +23,6 @@ class BaseEtl(ABC):
 
         self.chroma_db_repository = ChromaDbRepository(ip="localhost", port=8001)
         self.chroma_db_repository.connect()
-
-    def _chunks(self, array: list, n):
-        """Yield successive n-sized chunks from lst."""
-        for i in range(0, len(array), n):
-            yield array[i:i + n]
 
     @abstractmethod
     def _row_to_document(self, row) -> Document:
@@ -55,14 +51,12 @@ class BaseEtl(ABC):
         texts = [doc.text for doc in documents]
 
         embeddings_response = embedding_service.get_embedding_with_uuid(texts, chunk_size=200)
-
         for doc, embed_text in zip(documents, embeddings_response):
             doc.embedding = embed_text.embedding
             doc.id = embed_text.uuid
         
-        for i, doc in enumerate(self._chunks(documents, 500)):
+        for i, doc in enumerate(Utils.chunks(documents, 500)):
             logger.info(f"{i}. chunk inserted")
-
             result = self.chroma_db_repository.insert(doc)
             if not result.success:
                 logger.error(result.message)

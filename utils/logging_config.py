@@ -28,4 +28,6 @@ def get_logger(name: str) -> logging.Logger:
     logger.addHandler(handler)
     logger.propagate = False
 
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     return logger
