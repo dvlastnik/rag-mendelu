@@ -68,8 +68,22 @@ async def change_embedding_model(request: ChangeEmbeddingModelRequest, embed_mod
     return {"description": "Model changed successfully"}
 
 @app.get(
-    path='/get-available-models'
+    path='/get-available-models',
+    response_model=GetAvailableModelsResponse
 )
 async def get_available_models(embed_model: BaseEmbeddingModelService = Depends(get_embedding_service)):
-    return embed_model.get_installed_models()
+    return GetAvailableModelsResponse(model_names=embed_model.get_installed_models())
+
+@app.get(
+    path='/get-current-model',
+    response_model=GetCurrentModelResponse
+)
+async def get_current_model(
+    embed_model: BaseEmbeddingModelService = Depends(get_embedding_service), 
+    embed_manager: EmbeddingServiceManager = Depends(get_embedding_manager)
+):
+    return GetCurrentModelResponse(
+        embedding_model_name=embed_model.get_current_model(),
+        embedding_library_name=embed_manager.active_service_name
+    )
         

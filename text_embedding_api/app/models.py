@@ -19,3 +19,14 @@ class ChangeEmbeddingModelRequest(BaseModel):
 
 ###########
 
+# get_available_models
+class GetAvailableModelsResponse(BaseModel):
+    model_names: list[str]
+###########
+
+# get-current-model
+class GetCurrentModelResponse(BaseModel):
+    embedding_model_name: str
+    embedding_library_name: str
+###########
+

@@ -27,3 +27,6 @@ class EmbeddingModelService(BaseEmbeddingModelService):
     
     def get_installed_models(self) -> list[str]:
         return self.installed_models
+    
+    def get_current_model(self):
+        return self.model._model_card

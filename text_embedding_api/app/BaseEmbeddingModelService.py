@@ -16,3 +16,7 @@ class BaseEmbeddingModelService(ABC):
     @abstractmethod
     def get_installed_models(self) -> List[str]:
         pass
+
+    @abstractmethod
+    def get_current_model(self) -> str:
+        pass

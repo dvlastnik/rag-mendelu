@@ -33,3 +33,6 @@ class FastEmbedEmbeddingService(BaseEmbeddingModelService):
 
     def get_installed_models(self):
         return self.installed_models
+    
+    def get_current_model(self):
+        return self.model.model_name
