@@ -2,7 +2,7 @@ from typing import List
 import chromadb
 from chromadb.config import Settings
 
-from database.base.Document import Document
+from database.base.MyDocument import MyDocument
 from database.base.BaseDbRepository import BaseDbRepository
 from database.base.DbOperationResult import DbOperationResult
 from utils.logging_config import get_logger
@@ -10,47 +10,46 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 class ChromaDbRepository(BaseDbRepository):
-    COLLECTION_NAME = 'csu'
-    METADATA = {
-        "name": "MZDCRR_1_data",
-        "description": "Průměrný evidenční počet zaměstnanců a průměrné hrubé měsíční mzdy z čtvrtletního zjišťování - kumulace čtvrtletí za 1-4Q (rok).",
-        "source": "Český statistický úřad (ČSÚ)"
-    }
-
-    def _if_collection_exist_delete(self, collection_name: str):
-        exists = self.get_collection(collection_name=collection_name)
+    def _if_collection_exist_delete(self):
+        exists = self.get_collection()
         if exists:
-            self.client.delete_collection(collection_name)
+            self.client.delete_collection(self.collection_name)
 
-    def _create_collection(self, collection_name: str, metadata: dict) -> chromadb.Collection:
+    def _create_collection(self) -> chromadb.Collection:
         try:
-            self._if_collection_exist_delete(collection_name=collection_name)
+            self._if_collection_exist_delete()
         except chromadb.errors.NotFoundError:
-            logger.debug(f"Collection {self.COLLECTION_NAME} was not yet created")
+            logger.debug(f"Collection {self.collection_name} was not yet created")
 
         return self.client.create_collection(
-            name=collection_name,
-            metadata=metadata
+            name=self.collection_name,
+            metadata=self.metadata
         )
 
-    def get_collection(self, collection_name: str):
+    def get_collection(self):
         self.collection = self.client.get_collection(
-            name=collection_name
+            name=self.collection_name
         )
 
         return self.collection
 
     def connect(self, create_collection=True):
-        self.client = chromadb.HttpClient(host=self.ip, port=self.port, settings=Settings(anonymized_telemetry=False))
-        if create_collection:
-            self.collection = self._create_collection(collection_name=self.COLLECTION_NAME, metadata=self.METADATA)
-        else:
-            self.collection = self.get_collection(self.COLLECTION_NAME)
+        try:
+            self.client = chromadb.HttpClient(host=self.ip, port=self.port, settings=Settings(anonymized_telemetry=False))
+            if create_collection:
+                self.collection = self._create_collection()
+            else:
+                self.collection = self.get_collection()
+
+            return DbOperationResult(success=True)
+        except Exception as e:
+            DbOperationResult(success=False, message=f"Error occured during 'connect' function: {e}")
+
 
     def close(self):
         return super().close()
 
-    def insert(self, docs: List[Document]):
+    def insert(self, docs: List[MyDocument]):
         ids = []
         embeddings = []
         texts = []
@@ -93,15 +92,16 @@ class ChromaDbRepository(BaseDbRepository):
                     n_results=n_results
                 )
 
-            results = Document.from_chromadb_result(results)
+            results = MyDocument.from_chromadb_result(results)
             return DbOperationResult(success=True, data=results)
         except Exception as e:
             return DbOperationResult(success=False, message=f"Error during search at ChromaDbRepository: {e}")
 
     def check_if_data_were_inserted(self):
-        data = self.collection.get()
-
-        if len(data["ids"]) > 0:
+        if self.get_count() > 0:
             return DbOperationResult(success=True)
         return DbOperationResult(success=False, message="When trying to get all data from database empty list was returned")
+    
+    def get_count(self):
+        return self.collection.count()
         

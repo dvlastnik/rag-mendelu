@@ -59,7 +59,7 @@ class TextEmbeddingService:
             print(f"Request failed: {e}")
             return None
 
-    def embed_text_and_return_result(self, json_data: Dict) -> List[EmbeddingResponse]:
+    def _embed_text_and_return_result(self, json_data: Dict) -> List[EmbeddingResponse]:
         response = self._make_request(
             method=HttpMethod.POST,
             endpoint='/embed-text',
@@ -83,13 +83,13 @@ class TextEmbeddingService:
                     'texts': [data]
                 }
 
-            result = self.embed_text_and_return_result(texts)
+            result = self._embed_text_and_return_result(texts)
         else:
             for i, chunk in enumerate(Utils.chunks(data, chunk_size)):
                 try:
                     logger.info(f"{i}. chunk processed")
 
-                    temp_arr = self.embed_text_and_return_result({
+                    temp_arr = self._embed_text_and_return_result({
                         "texts": chunk
                     })
 

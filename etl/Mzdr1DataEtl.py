@@ -2,19 +2,21 @@ import traceback
 import pandas as pd
 
 from etl.BaseEtl import BaseEtl, ETLState
-from database.base.Document import Document
+from database.base.MyDocument import MyDocument
 from utils.logging_config import get_logger
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 
 logger = get_logger(__name__)
 
 class Mzdr1DataEtl(BaseEtl):
+    SOURCE = "https://data.csu.gov.cz/datastat/info/SADA/MZDR?vSel=1"
+
     new_headers = [
         "indicator_label","ekonomic_sector", "year",
-        "state","region", "province", "value"
+        "state","region", "province", "value", "source"
     ]
 
-    def _row_to_document(self, row) -> Document:
+    def _row_to_document(self, row) -> MyDocument:
 
         if row['province'] == row['region'] == row['state']:
             text = (
@@ -31,7 +33,7 @@ class Mzdr1DataEtl(BaseEtl):
                 f"ve výši {row['value']}."
             )
 
-        return Document(id=None, text=text, embedding=None, metadata=row.to_dict())
+        return MyDocument(id=None, text=text, embedding=None, metadata=row.to_dict())
 
 
     def transform(self) -> None:
@@ -61,6 +63,7 @@ class Mzdr1DataEtl(BaseEtl):
             df["value"] = pd.to_numeric(df["value"], errors="coerce").round(1)
             df["region"] = df["region"].fillna("Česko")
             df["province"] = df["province"].fillna("Česko")
+            df["source"] = self.SOURCE
 
             for col in self.new_headers:
                 df[col] = df[col].astype(str).str.strip()

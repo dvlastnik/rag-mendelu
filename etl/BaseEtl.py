@@ -1,31 +1,32 @@
 from abc import ABC, abstractmethod
-import pickle
 from typing import List
 import pandas as pd
 
-from database.ChromaDbRepository import ChromaDbRepository
+from typing import Type
+from database.base.BaseDbRepository import BaseDbRepository
 from etl.EtlState import ETLState
 from utils.logging_config import get_logger
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
-from database.base.Document import Document
+from database.base.MyDocument import MyDocument
 from utils.utils import Utils
 
 
 logger = get_logger(__name__)
 
 class BaseEtl(ABC):
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str, db_repository: BaseDbRepository):
         super().__init__()
         self.documents = []
         self.df = None
+        self.db_repository = db_repository
         self.filepath = filepath
         self.state = ETLState.NOT_STARTED
 
-        self.chroma_db_repository = ChromaDbRepository(ip="localhost", port=8001)
-        self.chroma_db_repository.connect()
+        # TODO: Make this somehow pretty, so we dont have to put hardcoded repositories here
+        self.db_repository.connect()
 
     @abstractmethod
-    def _row_to_document(self, row) -> Document:
+    def _row_to_document(self, row) -> MyDocument:
         raise NotImplementedError("Method ._row_to_document() has to be implemented in subclass.")
 
     def extract(self) -> None:
@@ -47,7 +48,7 @@ class BaseEtl(ABC):
         raise NotImplementedError("Method .transform() has to be implemented in subclass.")
     
     def load(self, embedding_service: TextEmbeddingService) -> None:
-        documents: List[Document] = self.df.apply(self._row_to_document, axis=1).tolist()
+        documents: List[MyDocument] = self.df.apply(self._row_to_document, axis=1).tolist()
         texts = [doc.text for doc in documents]
 
         embeddings_response = embedding_service.get_embedding_with_uuid(texts, chunk_size=200)
@@ -57,13 +58,13 @@ class BaseEtl(ABC):
         
         for i, doc in enumerate(Utils.chunks(documents, 500)):
             logger.info(f"{i}. chunk inserted")
-            result = self.chroma_db_repository.insert(doc)
+            result = self.db_repository.insert(doc)
             if not result.success:
                 logger.error(result.message)
                 self.state = ETLState.FAILED
                 return
 
-        check_db_data = self.chroma_db_repository.check_if_data_were_inserted()
+        check_db_data = self.db_repository.check_if_data_were_inserted()
         if not check_db_data.success:
             logger.error(result.message)
             self.state = ETLState.FAILED
