@@ -4,9 +4,9 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir fastapi uvicorn sentence-transformers fastembed
 
-COPY . .
+COPY . /app
 
-WORKDIR /app/app
+WORKDIR /app/app/backend
 
 EXPOSE 8000
 

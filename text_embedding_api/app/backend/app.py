@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import sentence_transformers
 
@@ -7,6 +8,19 @@ from EmbeddingServiceManager import EmbeddingServiceManager
 from BaseEmbeddingModelService import BaseEmbeddingModelService
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 embedding_manager = EmbeddingServiceManager()
 
 def get_embedding_manager():
