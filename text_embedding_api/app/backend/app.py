@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
-import sentence_transformers
 
 from models import *
-from EmbeddingServiceManager import EmbeddingServiceManager
-from BaseEmbeddingModelService import BaseEmbeddingModelService
+from embedding.EmbeddingServiceManager import EmbeddingServiceManager
+from embedding.BaseEmbeddingModelService import BaseEmbeddingModelService
+from chunking.SentenceSimiliarity import SentenceSimilarity
+from chunking.SimilarSentenceSplitter import SimilarSentenceSplitter
 
 app = FastAPI()
 
@@ -23,11 +24,17 @@ app.add_middleware(
 
 embedding_manager = EmbeddingServiceManager()
 
+sentence_similarity_model = SentenceSimilarity(embedding_service=embedding_manager.services["sentence_transformers"])
+chunking_model = SimilarSentenceSplitter(similarity_model=sentence_similarity_model)
+
 def get_embedding_manager():
     return embedding_manager
 
 def get_embedding_service():
     return embedding_manager.active_service
+
+def get_similarity_sentence_splitter():
+    return chunking_model
 
 @app.get('/')
 async def root():
@@ -53,16 +60,19 @@ async def embed_text(request: EmbedTextRequest, embed_model: BaseEmbeddingModelS
     if not request.texts:
         raise HTTPException(status_code=400, detail="No text to embed provided")
     
-    texts = [t for t in request.texts if t.strip()]
-    
-    embeddings = embed_model.encode(texts)
+    try:
+        texts = [t for t in request.texts if t.strip()]
+        
+        embeddings = embed_model.encode(texts)
 
-    data = [
-        EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
-        for embedding in embeddings
-    ]
+        data = [
+            EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
+            for embedding in embeddings
+        ]
 
-    return EmbedTextResponse(data=data)
+        return EmbedTextResponse(data=data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error: " + str(e))
 
 @app.post(
     path='/change-embedding-model',
@@ -100,4 +110,19 @@ async def get_current_model(
         embedding_model_name=embed_model.get_current_model(),
         embedding_library_name=embed_manager.active_service_name
     )
-        
+
+# TODO: Endpoint for chunking text
+@app.post(
+    path='/chunk-by-similarity',
+    response_model=ChunkBySimilarityResponse,
+    responses={400: {"description": "Bad Request - No text provided"}}
+)
+async def chunk_similarity_split(request: ChunkBySimilarityRequest, chunking_model: SimilarSentenceSplitter = Depends(get_similarity_sentence_splitter), embed_model: BaseEmbeddingModelService = Depends(get_embedding_service)):
+    if not request.text:
+        raise HTTPException(status_code=400, detail="No text provided")
+    
+    try:
+        sentences = chunking_model.split_text(request.text)
+        return ChunkBySimilarityResponse(sentences=sentences)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error: " + str(e))

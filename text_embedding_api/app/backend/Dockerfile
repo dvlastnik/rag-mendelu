@@ -2,11 +2,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn sentence-transformers fastembed
+COPY requirements.txt .
 
-COPY . /app
+RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m spacy download en_core_web_sm
 
-WORKDIR /app/app/backend
+COPY . .
 
 EXPOSE 8000
 

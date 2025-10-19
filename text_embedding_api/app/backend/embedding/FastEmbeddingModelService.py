@@ -1,6 +1,6 @@
 from typing import List
 from fastembed.embedding import TextEmbedding
-from BaseEmbeddingModelService import BaseEmbeddingModelService
+from embedding.BaseEmbeddingModelService import BaseEmbeddingModelService
 
 class FastEmbedEmbeddingService(BaseEmbeddingModelService):
     _instance = None

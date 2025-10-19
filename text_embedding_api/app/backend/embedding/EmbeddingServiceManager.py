@@ -1,5 +1,5 @@
-from EmbeddingModelService import EmbeddingModelService
-from FastEmbeddingModelService import FastEmbedEmbeddingService
+from embedding.EmbeddingModelService import EmbeddingModelService
+from embedding.FastEmbeddingModelService import FastEmbedEmbeddingService
 
 class EmbeddingServiceManager:
     def __init__(self):

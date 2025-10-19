@@ -1,5 +1,5 @@
 from sentence_transformers import SentenceTransformer
-from BaseEmbeddingModelService import BaseEmbeddingModelService
+from embedding.BaseEmbeddingModelService import BaseEmbeddingModelService
 
 class EmbeddingModelService(BaseEmbeddingModelService):
     _instance = None
@@ -22,8 +22,8 @@ class EmbeddingModelService(BaseEmbeddingModelService):
         if model_name not in self.installed_models:
             self.installed_models.append(model_name)
 
-    def encode(self, texts):
-        return self.model.encode(texts, normalize_embeddings=True)
+    def encode(self, text):
+        return self.model.encode(text, normalize_embeddings=True)
     
     def get_installed_models(self) -> list[str]:
         return self.installed_models

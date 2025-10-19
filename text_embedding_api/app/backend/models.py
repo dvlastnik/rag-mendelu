@@ -1,15 +1,16 @@
 from pydantic import BaseModel
+from typing import List
 
 # embed-text
 class EmbedText(BaseModel):
     uuid: str
-    embeddings: list[float]
+    embeddings: List[float]
 
 class EmbedTextRequest(BaseModel):
-    texts: list[str]
+    texts: List[str]
 
 class EmbedTextResponse(BaseModel):
-    data: list[EmbedText]
+    data: List[EmbedText]
 
 ###########
 
@@ -21,7 +22,7 @@ class ChangeEmbeddingModelRequest(BaseModel):
 
 # get_available_models
 class GetAvailableModelsResponse(BaseModel):
-    model_names: list[str]
+    model_names: List[str]
 ###########
 
 # get-current-model
@@ -30,3 +31,10 @@ class GetCurrentModelResponse(BaseModel):
     embedding_library_name: str
 ###########
 
+# chunk similarity splitter
+class ChunkBySimilarityRequest(BaseModel):
+    text: str
+
+class ChunkBySimilarityResponse(BaseModel):
+    sentences: List[str]
+###########
