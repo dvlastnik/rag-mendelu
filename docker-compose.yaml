@@ -3,9 +3,9 @@ networks:
     driver: bridge
 
 services:
-  text-embedding-api:
-    build: ./text_embedding_api
-    container_name: text-embedding-api
+  text-embedding-backend:
+    build: ./text_embedding_api/app/backend
+    container_name: text-embedding-backend
     ports:
       - 8000:8000
 

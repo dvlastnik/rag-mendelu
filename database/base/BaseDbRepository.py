@@ -1,22 +1,32 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Type
+from typing import List, Dict, Type, Any
 
 from database.base.MyDocument import MyDocument
-from database.base.DbOperationResult import DbOperationResult
+from database.base.DbOperationResult import DbOperationResult, execute_and_check_db_operation
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 class BaseDbRepository(ABC):
-    def __init__(self, ip: str, port: int, collection_name: str, metadata: Dict):
+    name = 'base'
+
+    def __init__(self, ip: str, port: int, collection_name: str = "", metadata: Dict = {}):
         self.ip = ip
         self.port = port
         self.collection_name = collection_name
         self.metadata = metadata
-        super().__init__()
+
+    def connect_and_create_collection(self):
+        execute_and_check_db_operation(operation=self.connect, operation_description=".connect()")
+        execute_and_check_db_operation(operation=self.if_collection_exist_delete, operation_description="if_collection_exist_delete")
+        self.create_collection()
 
     @abstractmethod
-    def connect(self, create_collection: bool) -> DbOperationResult:
+    def connect(self) -> DbOperationResult:
+        pass
+
+    @abstractmethod
+    def create_collection(self) -> Any:
         pass
 
     @abstractmethod
@@ -41,6 +51,10 @@ class BaseDbRepository(ABC):
 
     @abstractmethod
     def close(self) -> DbOperationResult:
+        pass
+
+    @abstractmethod
+    def if_collection_exist_delete(self) -> DbOperationResult:
         pass
 
     @classmethod

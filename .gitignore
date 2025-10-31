@@ -175,3 +175,6 @@ cython_debug/
 
 # pkl file containing converted dataset
 *.pkl
+
+# data
+data/ignore_*

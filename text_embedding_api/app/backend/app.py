@@ -7,6 +7,7 @@ from embedding.EmbeddingServiceManager import EmbeddingServiceManager
 from embedding.BaseEmbeddingModelService import BaseEmbeddingModelService
 from chunking.SentenceSimiliarity import SentenceSimilarity
 from chunking.SimilarSentenceSplitter import SimilarSentenceSplitter
+import utils
 
 app = FastAPI()
 
@@ -61,16 +62,7 @@ async def embed_text(request: EmbedTextRequest, embed_model: BaseEmbeddingModelS
         raise HTTPException(status_code=400, detail="No text to embed provided")
     
     try:
-        texts = [t for t in request.texts if t.strip()]
-        
-        embeddings = embed_model.encode(texts)
-
-        data = [
-            EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
-            for embedding in embeddings
-        ]
-
-        return EmbedTextResponse(data=data)
+        return utils.embed_and_return_response(request_text=request.texts, embed_model=embed_model)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error: " + str(e))
 
@@ -111,18 +103,40 @@ async def get_current_model(
         embedding_library_name=embed_manager.active_service_name
     )
 
-# TODO: Endpoint for chunking text
 @app.post(
     path='/chunk-by-similarity',
     response_model=ChunkBySimilarityResponse,
     responses={400: {"description": "Bad Request - No text provided"}}
 )
-async def chunk_similarity_split(request: ChunkBySimilarityRequest, chunking_model: SimilarSentenceSplitter = Depends(get_similarity_sentence_splitter), embed_model: BaseEmbeddingModelService = Depends(get_embedding_service)):
+async def chunk_similarity_split(
+    request: ChunkBySimilarityRequest, 
+    chunking_model: SimilarSentenceSplitter = Depends(get_similarity_sentence_splitter)
+):
     if not request.text:
-        raise HTTPException(status_code=400, detail="No text provided")
+        raise HTTPException(status_code=400, detail={"description": "Bad Request - No text provided"})
     
     try:
         sentences = chunking_model.split_text(request.text)
         return ChunkBySimilarityResponse(sentences=sentences)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Internal server error: " + str(e))
+    
+@app.post(
+    path='/chunk-and-embed',
+    response_model=ChunkAndEmbedResponse,
+    responses={400: {"description": "Bad Request - No text provided"}}
+)
+async def chunk_and_embed(
+    request: ChunkBySimilarityRequest, 
+    chunking_model = Depends(get_similarity_sentence_splitter),
+    embed_model: BaseEmbeddingModelService = Depends(get_embedding_service)
+):
+    if not request.text:
+        raise HTTPException(status_code=400, detail={"description": "Bad Request - No text provided"})
+    
+    try:
+        sentences = chunking_model.split_text(request.text)
+        
+        return utils.embed_and_return_response(request_text=sentences, embed_model=embed_model, with_original_text=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error: " + str(e))

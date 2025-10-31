@@ -38,3 +38,12 @@ class ChunkBySimilarityRequest(BaseModel):
 class ChunkBySimilarityResponse(BaseModel):
     sentences: List[str]
 ###########
+
+# Chunk and embed
+class ChunkAndEmbed(BaseModel):
+    text: str
+    embed_text: EmbedText
+
+class ChunkAndEmbedResponse(BaseModel):
+    data: List[ChunkAndEmbed]
+###########

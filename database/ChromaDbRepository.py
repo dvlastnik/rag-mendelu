@@ -10,21 +10,29 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 class ChromaDbRepository(BaseDbRepository):
-    def _if_collection_exist_delete(self):
-        exists = self.get_collection()
-        if exists:
-            self.client.delete_collection(self.collection_name)
-
-    def _create_collection(self) -> chromadb.Collection:
+    name = 'chroma'
+    
+    def if_collection_exist_delete(self):
         try:
-            self._if_collection_exist_delete()
+            exists = self.get_collection()
+            if exists:
+                logger.info(f"Collection '{self.collection_name}' exists, deleting.")
+                self.client.delete_collection(self.collection_name)
+                return DbOperationResult(success=True)
+            else:
+                return DbOperationResult(success=True)
         except chromadb.errors.NotFoundError:
-            logger.debug(f"Collection {self.collection_name} was not yet created")
+            logger.debug(f"Collection {self.collection_name} already exists.")
+            return DbOperationResult(success=True)
 
-        return self.client.create_collection(
+    def create_collection(self) -> chromadb.Collection:
+        self.collection = self.client.create_collection(
             name=self.collection_name,
-            metadata=self.metadata
+            metadata=self.metadata,
+            get_or_create=True
         )
+
+        return self.collection
 
     def get_collection(self):
         self.collection = self.client.get_collection(
@@ -33,17 +41,13 @@ class ChromaDbRepository(BaseDbRepository):
 
         return self.collection
 
-    def connect(self, create_collection=True):
+    def connect(self):
         try:
             self.client = chromadb.HttpClient(host=self.ip, port=self.port, settings=Settings(anonymized_telemetry=False))
-            if create_collection:
-                self.collection = self._create_collection()
-            else:
-                self.collection = self.get_collection()
 
             return DbOperationResult(success=True)
         except Exception as e:
-            DbOperationResult(success=False, message=f"Error occured during 'connect' function: {e}")
+            return DbOperationResult(success=False, message=f"Error occured during 'connect' function: {e}")
 
 
     def close(self):

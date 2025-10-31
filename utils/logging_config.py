@@ -31,3 +31,11 @@ def get_logger(name: str) -> logging.Logger:
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     return logger
+
+def highlight_log(logger: logging.Logger, text: str, character: str = '/', length: int = 5, only_char: bool = False) -> None:
+    side_string = length*character
+
+    if only_char:
+        logger.info(2*side_string + (len(text)+2)*character)
+    else:
+        logger.info(side_string + ' ' + text + ' ' + side_string)

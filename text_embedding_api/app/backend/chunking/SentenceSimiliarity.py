@@ -4,7 +4,7 @@ from sentence_transformers import util
 from embedding.EmbeddingModelService import EmbeddingModelService
 
 class SentenceSimilarity:
-    def __init__(self, embedding_service: EmbeddingModelService, similarity_threshold=0.2):
+    def __init__(self, embedding_service: EmbeddingModelService, similarity_threshold=0.3):
         self.embedding_service = embedding_service
         self.similarity_threshold = similarity_threshold
 

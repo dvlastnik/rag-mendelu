@@ -1,38 +1,69 @@
 from abc import ABC, abstractmethod
+import pathlib
 from typing import List
 import pandas as pd
 
 from typing import Type
 from database.base.BaseDbRepository import BaseDbRepository
 from etl.EtlState import ETLState
-from utils.logging_config import get_logger
+from utils.Utils import Utils
+from utils.logging_config import get_logger, highlight_log
+from etl.converters import convert_data
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 from database.base.MyDocument import MyDocument
-from utils.utils import Utils
 
 
 logger = get_logger(__name__)
 
 class BaseEtl(ABC):
-    def __init__(self, filepath: str, db_repository: BaseDbRepository):
+    def __init__(self, filepath: str, db_repository: BaseDbRepository, embedding_service: TextEmbeddingService):
         super().__init__()
-        self.documents = []
+        self.documents: List[MyDocument] = []
+        # dataframe for csv and xlsx
         self.df = None
         self.db_repository = db_repository
-        self.filepath = filepath
+        self.embedding_service = embedding_service
+        self.file = pathlib.Path(filepath)
+
         self.state = ETLState.NOT_STARTED
 
-        # TODO: Make this somehow pretty, so we dont have to put hardcoded repositories here
-        self.db_repository.connect()
+    def _insert_by_chunks(self, chunk_size: int = 500) -> ETLState:
+        logger.info(f"Inserting documents of lenght: {len(self.documents)}, chunk_size = {chunk_size}")
+        for i, doc in enumerate(Utils.chunks(self.documents, chunk_size)):
+            result = self.db_repository.insert(doc)
+            if not result.success:
+                logger.error(result.message)
+                return ETLState.FAILED
+            else:
+                logger.info(f"{i}. chunk inserted")
+
+        return ETLState.LOADED
+
+    def _check_if_data_are_loaded(self) -> ETLState:
+        check_db_data = self.db_repository.check_if_data_were_inserted()
+        if not check_db_data.success:
+            logger.error(check_db_data.message)
+            return ETLState.FAILED
+
+        logger.info(f"Rows in database after loading: {self.file.stem} is {self.db_repository.get_count()}")
+        return ETLState.LOADED
 
     @abstractmethod
     def _row_to_document(self, row) -> MyDocument:
         raise NotImplementedError("Method ._row_to_document() has to be implemented in subclass.")
+    
+    @abstractmethod
+    def get_file_path(self, only_folder: bool = False, chunk_index: int | None = None) -> pathlib.Path:
+        raise NotImplementedError("Method .get_file_path() has to be implemented in subclass.")
 
     def extract(self) -> None:
         try:
-            self.df = pd.read_csv(self.filepath)
-            self.state = ETLState.EXTRACTED
+            try:
+                self.df = convert_data(self.file)
+                self.state = ETLState.EXTRACTED
+            except ValueError as ve:
+                logger.error(ve)
+                self.state = ETLState.FAILED
         except FileNotFoundError:
             self.df = None
             self.state = ETLState.FAILED
@@ -47,46 +78,38 @@ class BaseEtl(ABC):
         """
         raise NotImplementedError("Method .transform() has to be implemented in subclass.")
     
-    def load(self, embedding_service: TextEmbeddingService) -> None:
-        documents: List[MyDocument] = self.df.apply(self._row_to_document, axis=1).tolist()
-        texts = [doc.text for doc in documents]
+    def load(self) -> None:
+        from etl.loaders import load_data
 
-        embeddings_response = embedding_service.get_embedding_with_uuid(texts, chunk_size=200)
-        for doc, embed_text in zip(documents, embeddings_response):
-            doc.embedding = embed_text.embedding
-            doc.id = embed_text.uuid
-        
-        for i, doc in enumerate(Utils.chunks(documents, 500)):
-            logger.info(f"{i}. chunk inserted")
-            result = self.db_repository.insert(doc)
-            if not result.success:
-                logger.error(result.message)
-                self.state = ETLState.FAILED
-                return
-
-        check_db_data = self.db_repository.check_if_data_were_inserted()
-        if not check_db_data.success:
-            logger.error(result.message)
+        try:
+            self.state = load_data(self)
+            self.state = self._check_if_data_are_loaded()
+        except Exception as e:
+            logger.exception(f"ETL Load strategy '{self.file.suffix.lower()}' failed: {e}")
             self.state = ETLState.FAILED
-            return
-        self.state = ETLState.LOADED
 
-    def run(self, embedding_service: TextEmbeddingService) -> None:
+    def run(self) -> None:
+        logger.info(50*'=')
         while True:
             match self.state:
                 case ETLState.NOT_STARTED:
+                    highlight_log(logger=logger, text="Extraction", character='*', only_char=False)
                     self.extract()
                 case ETLState.EXTRACTED:
-                    logger.info("Extraction done")
+                    highlight_log(logger=logger, text="Extraction", character='*', only_char=True)
+                    highlight_log(logger=logger, text="Transformation", character='*', only_char=False)
                     self.transform()
                 case ETLState.TRANSFORMED:
-                    logger.info("Transformation done")
-                    self.load(embedding_service)
+                    highlight_log(logger=logger, text="Transformation", character='*', only_char=True)
+                    highlight_log(logger=logger, text="Loading", character='*', only_char=False)
+                    self.load()
                 case ETLState.LOADED:
-                    logger.info("Loading done")
+                    highlight_log(logger=logger, text="Loading", character='*', only_char=True)
+                    logger.info(50*'=')
+                    print()
                     break
                 case ETLState.FILE_NOT_FOUND:
-                    logger.error(f"File was not found for path: {self.filepath}")
+                    logger.error(f"File was not found for path: {self.file}")
                     break
                 case ETLState.FAILED:
                     logger.error(f"ETL failed")

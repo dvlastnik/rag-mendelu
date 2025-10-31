@@ -72,6 +72,7 @@ class Mzdr1DataEtl(BaseEtl):
 
             logger.info(f"Transformed data to shape: {self.df.shape}")
             self.state = ETLState.TRANSFORMED
+            return
         except Exception as e:
             logger.exception("Error during transform step")
             traceback.print_exc()
