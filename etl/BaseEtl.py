@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import pathlib
 from typing import List
 import pandas as pd
+import traceback
 
 from typing import Type
 from database.base.BaseDbRepository import BaseDbRepository
@@ -66,10 +67,11 @@ class BaseEtl(ABC):
                 self.state = ETLState.FAILED
         except FileNotFoundError:
             self.df = None
-            self.state = ETLState.FAILED
+            self.state = ETLState.FILE_NOT_FOUND
         except Exception as e:
             self.df = None
-            self.state = ETLState.FILE_NOT_FOUND
+            traceback.print_exc()
+            self.state = ETLState.FAILED
 
     @abstractmethod
     def transform(self):
@@ -84,11 +86,12 @@ class BaseEtl(ABC):
         try:
             self.state = load_data(self)
             self.state = self._check_if_data_are_loaded()
+            self.state = ETLState.LOADED
         except Exception as e:
             logger.exception(f"ETL Load strategy '{self.file.suffix.lower()}' failed: {e}")
             self.state = ETLState.FAILED
 
-    def run(self) -> None:
+    def run(self) -> bool:
         logger.info(50*'=')
         while True:
             match self.state:
@@ -107,13 +110,13 @@ class BaseEtl(ABC):
                     highlight_log(logger=logger, text="Loading", character='*', only_char=True)
                     logger.info(50*'=')
                     print()
-                    break
+                    return True
                 case ETLState.FILE_NOT_FOUND:
                     logger.error(f"File was not found for path: {self.file}")
-                    break
+                    return False
                 case ETLState.FAILED:
                     logger.error(f"ETL failed")
-                    break
+                    return False
                 case _:
                     logger.warning("State machine in default case")
-                    break
+                    return False

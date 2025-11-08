@@ -44,7 +44,7 @@ class ChromaDbRepository(BaseDbRepository):
     def connect(self):
         try:
             self.client = chromadb.HttpClient(host=self.ip, port=self.port, settings=Settings(anonymized_telemetry=False))
-
+            self.collection = self.create_collection()
             return DbOperationResult(success=True)
         except Exception as e:
             return DbOperationResult(success=False, message=f"Error occured during 'connect' function: {e}")
@@ -107,5 +107,5 @@ class ChromaDbRepository(BaseDbRepository):
         return DbOperationResult(success=False, message="When trying to get all data from database empty list was returned")
     
     def get_count(self):
-        return self.collection.count()
+        return self.get_collection().count()
         

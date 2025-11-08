@@ -1,27 +1,28 @@
 import json
 import traceback
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict
 import pandas as pd
 import pathlib
 import re
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-import torch
-import ast
+from langchain_core.documents import Document
+from langchain_text_splitters import MarkdownHeaderTextSplitter
+import lmstudio as lms
+import sys
 
+from database.ChromaDbRepository import ChromaDbRepository
 from etl.BaseEtl import BaseEtl, ETLState
 from database.base.MyDocument import MyDocument
-from utils.Utils import Utils
+from text_embedding_api.TextEmbeddingService import ChunkAndEmbedResponse
+from metadata_extractor.LLMMetadataExtractor import LLMMetadataExtractor
+from metadata_extractor.models import DroughMetadata
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 class DroughEtl(BaseEtl):
-    SECTION_RE = re.compile(
-        r'^\s*(?P<hashes>#{1,})\s*(?P<title>.+?)\s*$'   # heading line (allow leading spaces)
-        r'(?:\r?\n)+'                                   # one or more newlines after heading line
-        r'(?P<body>.*?)(?=^\s*#{1,}\s+|\Z)',            # non-greedy body until next heading or EOF
-        flags=re.DOTALL | re.MULTILINE
-    )
+    def __init__(self, filepath, db_repository, embedding_service, metadata_extractor: LLMMetadataExtractor):
+        super().__init__(filepath, db_repository, embedding_service)
+        self.metadata_extractor = metadata_extractor
 
     def _row_to_document(self, row):
         return super()._row_to_document(row)
@@ -48,123 +49,194 @@ class DroughEtl(BaseEtl):
                 buffer.append(line)
 
         return " ".join(buffer)
-
-    def _extract_sections(self, markdown_text: str) -> List[Tuple[str, str, str, str]]:
-        html_regex = r"<.*?>"
-
-        FORBIDDEN_TITLE_KEYWORDS = {
-            "cite", "citing", "credits", "endnotes", "members", "references", "content"
-        }
-
-        sections = []
-        for m in self.SECTION_RE.finditer(markdown_text):
-            level = m.group('hashes')
-            title = m.group('title').strip()
-            body = m.group('body').rstrip()
-
-            if len(body) <= 20:
-                continue
-
-            title = re.sub(html_regex, "", title).strip()
-            title = title.replace("**", "")
-            title_lower = title.lower()
-
-            if any(word in title_lower for word in FORBIDDEN_TITLE_KEYWORDS):
-                continue
-
-            body = re.sub(html_regex, "", body).strip()
-
-            updated_body = self._merge_body(body)
-
-            metadata = {
-                "source": self.file.stem,
-                "title": title
-            }
-
-            if body != "" and "cite" not in title and "citing" not in title and "credits" not in title and "endnotes" not in title and "members" not in title and len(body) > 20:
-                sections.append((level, title, updated_body, metadata))
-        return sections
-
-    def _transform_with_model(self) -> None:
-        """
-        Experimental function, uses pretrained model to chunk text.
-        """
-        path_to_md = self.get_file_path(only_folder=False, chunk_index=None)
-        md_text = path_to_md.read_text(encoding="utf-8")
-        
-        sections = self._extract_sections(md_text)
-
-        # COPY PASTE
-        model_name = "chentong00/propositionizer-wiki-flan-t5-large"
-        device = "mps" if torch.mps.is_available() else "cpu"
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
-
-        for index, (level, heading, body, metadata) in enumerate(sections[0:3]):
-            input_text = body
-            
-            input_ids = tokenizer(input_text, max_length=2048, truncation=True, return_tensors="pt").input_ids
-            outputs = model.generate(input_ids.to(device), max_new_tokens=2048).cpu()
-
-            output_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            print(f"Type: {type(output_text)}")
-            json_match = re.search(r'\[\s*".*?\]\s*$', output_text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-                try:
-                    chunked_sentences = json.loads(json_str)
-                except json.JSONDecodeError:
-                    # Fallback: split manually
-                    logger.error(f"Failed to parse: {output_text[:200]}")
-                    chunked_sentences = []
-
-                if len(chunked_sentences) > 0:
-                    with open(self.get_file_path(), "w", encoding="utf-8") as f:
-                        f.write(f"{level} {heading}")
-                        f.write("\n")
-                        f.write("\n".join(chunked_sentences))
     
-    def transform(self) -> None:
-        try:
-            # Testing
-            # path_to_folder = self.get_file_path(only_folder=True)
-            # number_of_md_files = len(Utils.find_files(path_to_folder, "md"))
-            # if number_of_md_files >= 20:
-            #     logger.info(f"File: {self.file} was already transformed. Number of files found: {number_of_md_files}")
-            #     return
+    def filter_unwanted_pages(self, documents: List[Document]) -> List[Document]:
+        logger.info(f"Length of documents before filtering: {len(documents)}")
+        cleaned_docs = []
+        junk_keywords = ["contents", "contributors", "data sets and methods", "author", "table of contents", "credit", "editor", "cite", "citing", "references"]
+        
+        for doc in documents:
+            if doc.metadata.get("page") == 0:
+                continue
+                
+            page_text_lower = doc.page_content.lower()
+            titles = [title.lower() for title in doc.metadata['headers']]
 
-            path_to_md = self.get_file_path(only_folder=False)
-            md_text = path_to_md.read_text(encoding="utf-8")
+            text_has_junk = any(keyword in page_text_lower for keyword in junk_keywords)
+            title_has_junk = any(keyword in title for keyword in junk_keywords for title in titles)
             
-            sections = self._extract_sections(md_text)
-            for index, (level, heading, body, metadata) in enumerate(sections):
-                    clean_body = Utils.clean_md(body)
-                    # Real
-                    if clean_body == '':
-                        continue
-                    
-                    chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=clean_body)
-                    for chunk in chunk_and_embed_result:
-                        self.documents.append(MyDocument(id=chunk.embed_text.uuid, text=chunk.text, embedding=chunk.embed_text.embedding, metadata=metadata))
-                    
-                    # Testing
-                    # result_of_chunking = self.embedding_service.chunk_text(clean_body)
-                    # with open(self.get_file_path(only_folder=False, chunk_index=index), 'w', encoding='utf-8') as f:
-                    #     f.write(f"{level} {heading}\n")
-                    #     f.write("\n")
-                    #     for chunk in result_of_chunking.sentences:
-                    #         if ("Figure" in chunk and len(chunk) < 20) or chunk[0] == '[' or len(chunk) < 10 or chunk[0] == '-':
-                    #             continue
-                    #         f.write(f"{chunk}\n")
-                    #         f.write("\n")
-                    #     f.write(f"Metadata: {str(metadata)}")
+            if text_has_junk or title_has_junk:
+                continue
+                
+            cleaned_docs.append(doc)
+
+        logger.info(f"Length of documents after filtering: {len(cleaned_docs)}")
             
+        return cleaned_docs
+    
+    def clean_document_text(self, doc: Document) -> Document:
+        """
+        Cleans the page_content of a LangChain Document by fixing
+        PDF/Markdown extraction artifacts.
+        
+        - Removes Markdown image comments (e.g., ).
+        - Removes entire lines that are just figure/source references.
+        - Replaces non-breaking spaces (\xa0) with regular spaces.
+        - Fixes hyphenation across newlines (e.g., "Govern-\nment" -> "Government").
+        - Removes lines that *only* contain numbers (page numbers).
+        - Removes "flattened" endnote numbers (e.g., "...climate. 19 This...")
+        - Replaces single newlines (line breaks) with spaces (joins broken sentences).
+        - Collapses multiple newlines (paragraph breaks) into a single newline.
+        - Removes bracketed citation markers (e.g., [1], [22]).
+        - Removes URLs.
+        - Removes extra whitespace and stray backslashes.
+        """
+        text = doc.page_content
+        text = text.replace('<!-- image -->', '')
+        text = re.sub(r'^\s*(Figure|Source:).*$', '', text, flags=re.MULTILINE)
+        text = re.sub(r'https?://\S+', '', text)
+        text = text.replace('\xa0', ' ')
+        text = re.sub(r'(\w)-\n(\w)', r'\1\2', text)
+        text = re.sub(r'^\s*\d+\s*$', '', text, flags=re.MULTILINE)
+        text = re.sub(r'\. \d{1,3}\b', '. ', text) # For "...2022. 22" or "...did. 5 Real-time..."
+        text = re.sub(r',\s\d{1,3}\b', ', ', text) # For "...in 2021, 138 this..."
+        text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
+        text = re.sub(r'\n{2,}', '\n', text)
+        text = re.sub(r'\[[0-9]{1,3}\]', '', text) 
+        text = re.sub(r'\s+', ' ', text).strip()
+        text = text.replace('\\', '')
+        
+        return Document(page_content=text, metadata=doc.metadata)
+
+    def _load_and_split_markdown(self) -> List[Document]:
+        path_to_md = pathlib.Path(f"data/drough/{self.file.stem}.md")
+        md_text = path_to_md.read_text(encoding='utf-8')
+
+        headers_to_split_on = [
+            ("#", "Header 1"),
+            ("##", "Header 2"),
+            ("###", "Header 3"),
+            ("####", "Header 4"),
+        ]
+        md_splitter_obj = MarkdownHeaderTextSplitter(headers_to_split_on)
+        splitted_md = md_splitter_obj.split_text(md_text)
+
+        for doc in splitted_md:
+            base_metadata = {'headers': []}
+            for key in doc.metadata.keys():
+                if "Header" in key:
+                    base_metadata['headers'].append(doc.metadata[key].lower())
+            doc.metadata = base_metadata
+
+        return splitted_md
+    
+    def _extract_metadata_for_chunk(self, chunk: ChunkAndEmbedResponse, base_metadata: Dict) -> MyDocument | None:
+        if len(chunk.text) < 50:
+            return None
+        try:
+            # concatenate metadata/dicts together
+            final_metadata = base_metadata.copy()
+            
+            # ask llm for metadata
+            extracted_metadata = self.metadata_extractor.extract_metadata(prompt=DroughMetadata.DROUGH_METADATA_PROMPT.format(input_text=chunk.text), response_scheme=DroughMetadata.DroughMetadata)
+            final_metadata = final_metadata | extracted_metadata
+            for key, value in final_metadata.items():
+                if isinstance(value, str):
+                    final_metadata[key] = value.lower()
+                elif isinstance(value, list):
+                    lower_strings = []
+                    for string_value in final_metadata[key]:
+                        if isinstance(string_value, str):
+                            lower_strings.append(string_value.lower())
+                        else:
+                            lower_strings.append(str(lower_strings).lower())
+                    final_metadata[key] = lower_strings
+
+            # ChromaDB cannot store lists, so we will convert lists to str, that will be divided by '|'
+            if isinstance(self.db_repository, ChromaDbRepository):
+                for key, value in final_metadata.items():
+                    if isinstance(value, list):
+                        valid_items = {str(item).strip() for item in value if str(item).strip()}
+                        if valid_items:
+                            final_metadata[key] = f"|{'|'.join(sorted(valid_items))}|"
+                        else:
+                            final_metadata[key] = 'None'
+
+            return MyDocument(
+                id=chunk.embed_text.uuid,
+                text=chunk.text,
+                embedding=chunk.embed_text.embedding,
+                metadata=final_metadata
+            )
+    
+        except IndentationError as ie:
+            logger.error(f"Chat response: {extracted_metadata}")
+            logger.info(f"Chunked text length {len(chunk.text)}: {chunk.text}")
+            logger.error(f"Error during extract_metadata_for_chunk: {ie}")
+            traceback.print_exc()
+            sys.exit(1)
+            self.state = ETLState.FAILED
+
+    # TODO: Asi fajn napad, kdyz narazi na tabulku, tak to posle do llm a sumarizuje
+    # def _summarize_tables_if_present(self, text: str, model: lms.LLM) -> str:
+    #     pass
+
+    def _process_document(self, doc: Document) -> List[MyDocument]:
+        logger.info(f" Cleaning doc... {len(doc.page_content)}")
+        doc = self.clean_document_text(doc)
+        logger.info(f" Cleaned doc {len(doc.page_content)}")
+        if len(doc.page_content) < 50:
+            return []
+
+        processed_chunks = []
+        logger.info(f" Sending {len(doc.page_content)} length for chunk and embed")
+        chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=doc.page_content)
+        logger.info(f" Chunk and embed result {len(chunk_and_embed_result)}")
+        
+        for chunk in chunk_and_embed_result:
+            final_document = self._extract_metadata_for_chunk(chunk, doc.metadata)
+            if final_document:
+                processed_chunks.append(final_document)
+
+        return processed_chunks
+
+    def transform(self) -> None:
+
+        try:
+            # setup md
+            raw_documents = self._load_and_split_markdown()
+            documents = self.filter_unwanted_pages(raw_documents)
+            #topics = set()
+
+            for i, doc in enumerate(documents):
+                logger.info(f"{i}. transforming document...")
+                processed_docs = self._process_document(doc)
+                if processed_docs:
+                    self.documents.extend(processed_docs)
+                    logger.info(f"{i}. transformed document (found {len(processed_docs)} chunks)")
+                    logger.info(f"Current size of documents: {len(documents)}")
+                    #topics.update(doc.metadata['topics'])
+
+            # ONE POSSIBLE UPGRADE
+            # logger.info("Optimalizing metadata for each document...")
+            # for doc in self.documents:
+            #     chat = lms.Chat(USER_METADATA_PERSONA)
+            #     chat.add_user_message(METADATA_UPDATE_PROMPT.format(topics_list=topics, doc_sentence=doc.text, doc_metadata=doc.metadata['topics']))
+            #     chat_response = model.respond(chat)
+
+            #     print()
+            #     logger.info(f"Chat response: {chat_response}")
+            #     chat_response = eval(chat_response)
+            #     logger.info(f"Topics original: {doc.metadata['topics']}")
+            #     diff = set(chat_response) - set(doc.metadata['topics'])
+            #     logger.info(f"Difference: {list(diff)}")
+            #     print()
             logger.info(f"File: {self.file} was transformed!")
             logger.info(f"Number of documents: {len(self.documents)}")
             self.state = ETLState.TRANSFORMED
             return
         except Exception as e:
-            logger.exception("Error during transform step")
+            logger.exception(f"Error during transform step: {e}")
             traceback.print_exc()
             self.state = ETLState.FAILED
             return

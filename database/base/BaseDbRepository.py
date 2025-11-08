@@ -61,7 +61,7 @@ class BaseDbRepository(ABC):
     def check_count_for(cls, repo_cls: Type["BaseDbRepository"], ip: str, port: int, collection_name: str, metadata: Dict) -> None:
         repository = repo_cls(ip=ip, port=port, collection_name=collection_name, metadata=metadata)
 
-        res = repository.connect(create_collection=False)
+        res = repository.connect()
         if res.success:
             count = repository.get_count()
             logger.info(f"{repo_cls.__name__} has {count} rows")

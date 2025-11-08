@@ -8,6 +8,7 @@ from marker.config.parser import ConfigParser
 from marker.output import text_from_rendered
 from typing import List
 from pathlib import Path
+from docling.document_converter import DocumentConverter
 
 from utils.logging_config import get_logger
 
@@ -202,22 +203,26 @@ class Utils:
 
         try:
             logger.info(f"Processing {path}...")
+
+            converter = DocumentConverter()
+            result = converter.convert(str(path))
+            text = result.document.export_to_markdown()
             
-            config_dict = {
-                "disable_image_extraction": True,
-                "disable_multiprocessing": True,
-                "output_format": "markdown"
-            }
+            # config_dict = {
+            #     "disable_image_extraction": True,
+            #     "disable_multiprocessing": True,
+            #     "output_format": "markdown"
+            # }
             
-            config_parser = ConfigParser(config_dict)
+            # config_parser = ConfigParser(config_dict)
             
-            converter = PdfConverter(
-                artifact_dict=create_model_dict(),
-                config=config_parser.generate_config_dict()
-            )
+            # converter = PdfConverter(
+            #     artifact_dict=create_model_dict(),
+            #     config=config_parser.generate_config_dict()
+            # )
             
-            rendered = converter(str(path))
-            text, _, _ = text_from_rendered(rendered)
+            # rendered = converter(str(path))
+            # text, _, _ = text_from_rendered(rendered)
 
             output_path.write_text(text, encoding="utf-8")
             logger.info(f"Converted: {output_path}")

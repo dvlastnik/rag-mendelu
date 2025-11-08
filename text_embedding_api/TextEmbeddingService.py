@@ -157,7 +157,8 @@ class TextEmbeddingService:
         response = self._make_request(
             method=HttpMethod.POST,
             endpoint="/chunk-and-embed",
-            json=json
+            json=json,
+            timeout=20
         )
 
         return ChunkAndEmbedResponse.from_dict_list(response)

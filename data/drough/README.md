@@ -1,2 +1,2 @@
 # Drough data
-These datasets are in form of PDFs and are really large so they are not suitable for git.
+Original data were in PDF file format, but i converted it to Markdown, because it is much more suitable for RAG and LLMs.
