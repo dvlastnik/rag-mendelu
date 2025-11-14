@@ -2,10 +2,6 @@ import os
 import traceback
 import pathlib
 import re
-from marker.converters.pdf import PdfConverter
-from marker.models import create_model_dict
-from marker.config.parser import ConfigParser
-from marker.output import text_from_rendered
 from typing import List
 from pathlib import Path
 from docling.document_converter import DocumentConverter

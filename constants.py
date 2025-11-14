@@ -13,3 +13,8 @@ CHROMA_DB_METADATA_DROUGH = {
     "description": "Data about weather",
     "source": "bunch of pdfs"
 }
+
+VECTOR_DB_METADATA_DROUGH = {
+    "vector_size": 384,
+    "distance": "DOT"
+}

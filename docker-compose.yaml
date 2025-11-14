@@ -7,7 +7,22 @@ services:
     build: ./text_embedding_api/app/backend
     container_name: text-embedding-backend
     ports:
-      - 8000:8000
+      - "${BACKEND_PORT:-8000}:8000"
+    networks:
+      - net
+    env_file:
+      - .env
+  text-embedding-frontend:
+    build: ./text_embedding_api/app/frontend
+    container_name: text-embedding-frontend
+    ports:
+      # We map to host port 8081, since 8080 is used by Weaviate
+      - "${FRONTEND_PORT:-8081}:80"
+    networks:
+      - net
+    # Ensures the backend is started before the frontend
+    depends_on:
+      - text-embedding-backend
 
   chromadb:
     image: chromadb/chroma:1.0.7.dev25
@@ -18,6 +33,54 @@ services:
       - ANONYMIZED_TELEMETRY=False
       - LOG_LEVEL=debug
     ports:
-      - 8001:8000
+      - "${CHROMA_PORT:-8001}:8000"
     networks:
       - net
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+      - "${QDRANT_REST_PORT:-6333}:6333"
+    networks:
+      - net
+    volumes:
+      - ./qdrant_config.yaml:/qdrant/config/config.yaml:ro
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6334/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    container_name: weaviate
+    ports:
+      - "${WEAVIATE_HTTP_PORT:-8080}:8080"
+      - "${WEAVIATE_GRPC_PORT:-50051}:50051"
+    networks:
+      - net
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      CLUSTER_HOSTNAME: 'weaviate'
+      LOG_LEVEL: 'info'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/bin/weaviate-server", "--host", "127.0.0.1", "--port", "8080", "--scheme", "http", "--read-only"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  chroma_data:
+  qdrant_data:
+  weaviate_data:

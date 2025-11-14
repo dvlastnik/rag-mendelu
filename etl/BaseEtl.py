@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import pathlib
-from typing import List
+from typing import List, Dict
 import pandas as pd
 import traceback
 
@@ -17,12 +17,12 @@ from database.base.MyDocument import MyDocument
 logger = get_logger(__name__)
 
 class BaseEtl(ABC):
-    def __init__(self, filepath: str, db_repository: BaseDbRepository, embedding_service: TextEmbeddingService):
+    def __init__(self, filepath: str, db_repositories: Dict[str, BaseDbRepository], embedding_service: TextEmbeddingService):
         super().__init__()
         self.documents: List[MyDocument] = []
         # dataframe for csv and xlsx
         self.df = None
-        self.db_repository = db_repository
+        self.db_repositories = db_repositories
         self.embedding_service = embedding_service
         self.file = pathlib.Path(filepath)
 
@@ -31,22 +31,25 @@ class BaseEtl(ABC):
     def _insert_by_chunks(self, chunk_size: int = 500) -> ETLState:
         logger.info(f"Inserting documents of lenght: {len(self.documents)}, chunk_size = {chunk_size}")
         for i, doc in enumerate(Utils.chunks(self.documents, chunk_size)):
-            result = self.db_repository.insert(doc)
-            if not result.success:
-                logger.error(result.message)
-                return ETLState.FAILED
-            else:
-                logger.info(f"{i}. chunk inserted")
+            for _, repository in self.db_repositories.items():
+                result = repository.insert(doc)
+                if not result.success:
+                    logger.error(result.message)
+                    return ETLState.FAILED
+                else:
+                    index = i+1
+                    logger.info(f"{index}. chunk inserted ({repository.name})")
 
         return ETLState.LOADED
 
     def _check_if_data_are_loaded(self) -> ETLState:
-        check_db_data = self.db_repository.check_if_data_were_inserted()
-        if not check_db_data.success:
-            logger.error(check_db_data.message)
-            return ETLState.FAILED
+        for _, repository in self.db_repositories.items():
+            check_db_data = repository.check_if_data_were_inserted()
+            if not check_db_data.success:
+                logger.error(check_db_data.message)
+                return ETLState.FAILED
 
-        logger.info(f"Rows in database after loading: {self.file.stem} is {self.db_repository.get_count()}")
+            logger.info(f"Rows in database after loading: {self.file.stem} is {repository.get_count()}")
         return ETLState.LOADED
 
     @abstractmethod
@@ -85,7 +88,11 @@ class BaseEtl(ABC):
 
         try:
             self.state = load_data(self)
+            if self.state is ETLState.FAILED:
+                return
             self.state = self._check_if_data_are_loaded()
+            if self.state is ETLState.FAILED:
+                return
             self.state = ETLState.LOADED
         except Exception as e:
             logger.exception(f"ETL Load strategy '{self.file.suffix.lower()}' failed: {e}")

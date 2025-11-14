@@ -1,8 +1,12 @@
 import argparse
-import re
-import lmstudio as lms
+import time
+from dotenv import load_dotenv
+from typing import Dict
+import datetime
 
 from database.ChromaDbRepository import ChromaDbRepository
+from database.QdrantDbRepository import QdrantDbRepository
+from database.WeaviateDbRepository import WeaviateDbRepository
 from database.base.DbRepositoryFactory import DbRepositoryFactory
 from database.base.BaseDbRepository import BaseDbRepository
 from etl.DroughEtl import DroughEtl
@@ -14,59 +18,80 @@ from rag.RAG import RAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
 from utils.Utils import Utils
 import constants
+from database.base.MyDocument import MyDocument
 
 setup_logging()
 logger = get_logger(__name__)
 
-def run_etl_csu(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository):
+load_dotenv()
+
+def run_etl_csu(embedding_service: TextEmbeddingService, db_repositories: Dict[str, BaseDbRepository]):
     """Runs the CSU (Mzdr1DataEtl) ETL pipeline."""
+    # TODO: Update this whole function
     highlight_log(logger, "Starting ETL pipeline CSU")
 
-    db_repository.collection_name = constants.COLLECTION_NAME_CSU
-    db_repository.metadata=constants.CHROMA_DB_METADATA_CSU
+    for _, repository in db_repositories:
+        repository.collection_name = constants.COLLECTION_NAME_CSU
+        repository.metadata=constants.CHROMA_DB_METADATA_CSU
     
     etl = Mzdr1DataEtl(
         filepath="data/csu/MZDR_1_data.csv", 
-        db_repository=db_repository,
+        db_repository=db_repositories,
         embedding_service=embedding_service
     )
     etl.run()
     highlight_log(logger, "CSU ETL pipeline finished.")
 
-def run_etl_drough(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, llm_handler: LLMHandler):
+def run_etl_drough(embedding_service: TextEmbeddingService, db_repositories: Dict[str, BaseDbRepository], llm_handler: LLMHandler):
     """Runs the Drough (PDF) ETL pipeline on all files."""
     highlight_log(logger, "Starting Drough ETL pipeline...")
     pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
 
     # setting db constants
-    db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
-    db_repository.metadata = constants.CHROMA_DB_METADATA_DROUGH
-    db_repository.connect_and_create_collection()
+    for _, repository in db_repositories.items():
+        repository.collection_name = constants.COLLECTION_NAME_DROUGH
+
+        if repository.name == ChromaDbRepository.name:
+            repository.metadata = constants.CHROMA_DB_METADATA_DROUGH
+        repository.connect_and_create_collection()
 
     # metadata extractor
     metadata_extractor = LLMMetadataExtractor(llm_handler=llm_handler)
 
     for file in pdf_files:
+        start_time = time.time()
+
         obj = DroughEtl(
                 filepath=file,
-                db_repository=db_repository,
+                db_repositories=db_repositories,
                 embedding_service=embedding_service,
                 metadata_extractor=metadata_extractor
             )
         status = obj.run()
+
+        end_time = time.time()
+        elapsed = end_time - start_time
+        delta = datetime.timedelta(seconds=elapsed)
+        highlight_log(logger, str(delta), character='~')
+        
         if not status:
             logger.warning("ETL failed, stopping entire pipeline...")
             break
     highlight_log(logger, "Drough ETL pipeline finished.")
 
-def check_databases():
+def check_databases(db_repositories: Dict[str, BaseDbRepository], collection_name: str):
     """Checks the record counts for configured databases."""
     highlight_log(logger, "Checking database counts...")
-    # TODO: Create script that will accept some file, load it and will check all dbs that are in the config file
-    # so it will not be hardcoded
-    # BaseDbRepository.check_count_for(ChromaDbRepository, ip="localhost", port=8001, collection_name=constants.COLLECTION_NAME_CSU, metadata=constants.CHROMA_DB_METADATA_CSU)
-    BaseDbRepository.check_count_for(ChromaDbRepository, ip="localhost", port=8001, collection_name=constants.COLLECTION_NAME_DROUGH, metadata=constants.CHROMA_DB_METADATA_DROUGH)
+    for _, db in db_repositories.items():
+        db.collection_name = collection_name
 
+        if db.name == ChromaDbRepository.name:
+            db.metadata = constants.CHROMA_DB_METADATA_DROUGH
+
+        db.connect()
+        db.logger.info(f"Rows in {collection_name}: {db.get_count()}")
+        db.close()
+    
 
 def run_rag_chat(embedding_service: TextEmbeddingService, data_name: str, model_path: str):
     """
@@ -141,42 +166,57 @@ def parse_args():
     return parser.parse_args()
 
 def main():
+    start_time = time.time()
     args = parse_args()
 
     # Objects
     embedding_service = TextEmbeddingService(ip="localhost", port=8000)
-    db_repository = DbRepositoryFactory.create_db_repository(args.vector_db, ip="0.0.0.0", port=8001)
+    # DbRepositoryFactory.create_all_repositories()
+    db_repositories = DbRepositoryFactory.create_all_repositories()
     llm_handler = LLMHandler(ip="localhost", port=1234)
 
     if args.test_search:    
-        db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
-        db_repository.metadata = constants.CHROMA_DB_METADATA_DROUGH
-        db_repository.connect()
-        db_repository.create_collection()
+        # db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
+        # db_repository.metadata = constants.CHROMA_DB_METADATA_DROUGH
+        # db_repository.connect()
+        # db_repository.create_collection()
 
-        search_str = "What was the 2022 carbon dioxide concentration of 417.1 ppm?"
-        search_str_embed = embedding_service.get_embedding_with_uuid(data=search_str)
-        results = db_repository.search(text=None, text_embedded=search_str_embed[0].embedding, n_results=10)
-        if results.success:
-            for d in results.data:
-                print(d.text)
-                print()
-        else:
-            print('lol sussy baka')
+        # search_str = "What was the 2022 carbon dioxide concentration of 417.1 ppm?"
+        # search_str_embed = embedding_service.get_embedding_with_uuid(data=search_str)
+        # results = db_repository.search(text=None, text_embedded=search_str_embed[0].embedding, n_results=10)
+        # if results.success:
+        #     for d in results.data:
+        #         print(d.text)
+        #         print()
+        # else:
+        #     print('lol sussy baka')
+        pass
     else:
         if args.data == 'csu' and args.run_etl:
-            run_etl_csu(embedding_service, db_repository)
+            run_etl_csu(embedding_service, db_repositories)
             
         elif args.data == 'drough' and args.run_etl:
-            run_etl_drough(embedding_service, db_repository, llm_handler)
+            run_etl_drough(embedding_service, db_repositories, llm_handler)
             
-        elif args.check_dbs:
-            check_databases()
+        elif args.check_dbs and args.data is not None:
+            check_databases(db_repositories, args.data)
             
         else:
             # Default behavior: run the RAG chat
             logger.info("No ETL or DB check specified. Running RAG chat mode by default.")
             run_rag_chat(embedding_service, args.data, args.model_path)
 
+        # Close dbs
+        for _, db in db_repositories.items():
+            db.close()
+        
+        end_time = time.time()
+        elapsed = end_time - start_time
+        delta = datetime.timedelta(seconds=elapsed)
+        highlight_log(logger, str(delta), character='~')
+
 if __name__ == '__main__':
     main()
+
+
+    

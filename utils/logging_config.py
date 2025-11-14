@@ -8,8 +8,9 @@ def setup_logging(level=logging.INFO):
     )
 
 def get_logger(name: str) -> logging.Logger:
+    name = name.upper()
     formatter = ColoredFormatter(
-        "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+        "%(log_color)s%(asctime)s - %(levelname)s - [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         log_colors={
             "DEBUG":    "cyan",

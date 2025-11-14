@@ -20,8 +20,8 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 class DroughEtl(BaseEtl):
-    def __init__(self, filepath, db_repository, embedding_service, metadata_extractor: LLMMetadataExtractor):
-        super().__init__(filepath, db_repository, embedding_service)
+    def __init__(self, filepath, db_repositories, embedding_service, metadata_extractor: LLMMetadataExtractor):
+        super().__init__(filepath, db_repositories, embedding_service)
         self.metadata_extractor = metadata_extractor
 
     def _row_to_document(self, row):
@@ -152,19 +152,28 @@ class DroughEtl(BaseEtl):
                             lower_strings.append(str(lower_strings).lower())
                     final_metadata[key] = lower_strings
 
-            # ChromaDB cannot store lists, so we will convert lists to str, that will be divided by '|'
-            if isinstance(self.db_repository, ChromaDbRepository):
-                for key, value in final_metadata.items():
-                    if isinstance(value, list):
-                        valid_items = {str(item).strip() for item in value if str(item).strip()}
-                        if valid_items:
-                            final_metadata[key] = f"|{'|'.join(sorted(valid_items))}|"
-                        else:
-                            final_metadata[key] = 'None'
+            final_metadata['source'] = self.file.stem
+            final_metadata['text'] = chunk.text
+
+            def sanitize_string(s: str) -> str:
+                """Replaces invalid UTF-8 surrogates with '' (or '?')."""
+                # 'replace' substitutes invalid chars, preventing the error.
+                return s.encode('utf-8', 'replace').decode('utf-8')
+
+            sanitized_text = sanitize_string(chunk.text)
+            
+            for key, value in final_metadata.items():
+                if isinstance(value, str):
+                    final_metadata[key] = sanitize_string(value)
+                elif isinstance(value, list):
+                    final_metadata[key] = [
+                        sanitize_string(item) if isinstance(item, str) else item
+                        for item in value
+                    ]
 
             return MyDocument(
                 id=chunk.embed_text.uuid,
-                text=chunk.text,
+                text=sanitized_text,
                 embedding=chunk.embed_text.embedding,
                 metadata=final_metadata
             )
@@ -182,18 +191,20 @@ class DroughEtl(BaseEtl):
     #     pass
 
     def _process_document(self, doc: Document) -> List[MyDocument]:
-        logger.info(f" Cleaning doc... {len(doc.page_content)}")
+        logger.debug(f" Cleaning doc... {len(doc.page_content)}")
         doc = self.clean_document_text(doc)
-        logger.info(f" Cleaned doc {len(doc.page_content)}")
+        logger.debug(f" Cleaned doc {len(doc.page_content)}")
         if len(doc.page_content) < 50:
             return []
 
         processed_chunks = []
-        logger.info(f" Sending {len(doc.page_content)} length for chunk and embed")
+        logger.debug(f" Sending {len(doc.page_content)} length for chunk and embed")
         chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=doc.page_content)
-        logger.info(f" Chunk and embed result {len(chunk_and_embed_result)}")
+        logger.debug(f" Chunk and embed result {len(chunk_and_embed_result)}")
         
         for chunk in chunk_and_embed_result:
+            chunk.text = chunk.text.lstrip(',')
+
             final_document = self._extract_metadata_for_chunk(chunk, doc.metadata)
             if final_document:
                 processed_chunks.append(final_document)
@@ -209,12 +220,15 @@ class DroughEtl(BaseEtl):
             #topics = set()
 
             for i, doc in enumerate(documents):
-                logger.info(f"{i}. transforming document...")
+                index = i+1
+                size = len(documents)
+
+                logger.info(f"{index}/{size}. transforming document...")
                 processed_docs = self._process_document(doc)
                 if processed_docs:
                     self.documents.extend(processed_docs)
-                    logger.info(f"{i}. transformed document (found {len(processed_docs)} chunks)")
-                    logger.info(f"Current size of documents: {len(documents)}")
+                    logger.info(f"{index}/{size}. transformed document (found {len(processed_docs)} chunks)")
+                    logger.info(f"Current size of documents: {len(self.documents)}")
                     #topics.update(doc.metadata['topics'])
 
             # ONE POSSIBLE UPGRADE

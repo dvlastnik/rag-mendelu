@@ -5,9 +5,6 @@ from chromadb.config import Settings
 from database.base.MyDocument import MyDocument
 from database.base.BaseDbRepository import BaseDbRepository
 from database.base.DbOperationResult import DbOperationResult
-from utils.logging_config import get_logger
-
-logger = get_logger(__name__)
 
 class ChromaDbRepository(BaseDbRepository):
     name = 'chroma'
@@ -16,13 +13,13 @@ class ChromaDbRepository(BaseDbRepository):
         try:
             exists = self.get_collection()
             if exists:
-                logger.info(f"Collection '{self.collection_name}' exists, deleting.")
+                self.logger.info(f"Collection '{self.collection_name}' exists, deleting.")
                 self.client.delete_collection(self.collection_name)
                 return DbOperationResult(success=True)
             else:
                 return DbOperationResult(success=True)
         except chromadb.errors.NotFoundError:
-            logger.debug(f"Collection {self.collection_name} already exists.")
+            self.logger.debug(f"Collection {self.collection_name} already exists.")
             return DbOperationResult(success=True)
 
     def create_collection(self) -> chromadb.Collection:
@@ -63,7 +60,17 @@ class ChromaDbRepository(BaseDbRepository):
             ids.append(doc.id)
             embeddings.append(doc.embedding)
             texts.append(doc.text)
-            metadatas.append(doc.metadata)
+
+            # check if there are any lists in metadata, chroma does not support lists
+            corrected_metadata_for_chroma = {}
+            for key, value in doc.metadata.items():
+                if isinstance(value, list):
+                    valid_items = {str(item).strip() for item in value if str(item).strip()}
+                    if valid_items:
+                        corrected_metadata_for_chroma[key] = f"|{'|'.join(sorted(valid_items))}|"
+                    else:
+                        corrected_metadata_for_chroma[key] = 'None'
+            metadatas.append(corrected_metadata_for_chroma)
 
         try:
             self.collection.add(
