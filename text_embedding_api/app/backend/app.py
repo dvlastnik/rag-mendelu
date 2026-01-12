@@ -5,6 +5,7 @@ import uuid
 from models import *
 from embedding.EmbeddingServiceManager import EmbeddingServiceManager
 from embedding.BaseEmbeddingModelService import BaseEmbeddingModelService
+from embedding.SparseEmbeddingService import SparseEmbeddingService
 from chunking.SentenceSimiliarity import SentenceSimilarity
 from chunking.SimilarSentenceSplitter import SimilarSentenceSplitter
 import utils
@@ -27,6 +28,7 @@ embedding_manager = EmbeddingServiceManager()
 
 sentence_similarity_model = SentenceSimilarity(embedding_service=embedding_manager.services["sentence_transformers"])
 chunking_model = SimilarSentenceSplitter(similarity_model=sentence_similarity_model)
+sparse_model = SparseEmbeddingService()
 
 def get_embedding_manager():
     return embedding_manager
@@ -36,6 +38,9 @@ def get_embedding_service():
 
 def get_similarity_sentence_splitter():
     return chunking_model
+
+def get_sparse_service():
+    return sparse_model
 
 @app.get('/')
 async def root():
@@ -62,7 +67,7 @@ async def embed_text(request: EmbedTextRequest, embed_model: BaseEmbeddingModelS
         raise HTTPException(status_code=400, detail="No text to embed provided")
     
     try:
-        return utils.embed_and_return_response(request_text=request.texts, embed_model=embed_model)
+        return utils.embed_and_return_response(request_text=request.texts, embed_model=embed_model, sparse_model=None)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error: " + str(e))
 
@@ -129,7 +134,8 @@ async def chunk_similarity_split(
 async def chunk_and_embed(
     request: ChunkBySimilarityRequest, 
     chunking_model = Depends(get_similarity_sentence_splitter),
-    embed_model: BaseEmbeddingModelService = Depends(get_embedding_service)
+    embed_model: BaseEmbeddingModelService = Depends(get_embedding_service),
+    sparse_model: SparseEmbeddingService = Depends(get_sparse_service)
 ):
     if not request.text:
         raise HTTPException(status_code=400, detail={"description": "Bad Request - No text provided"})
@@ -137,6 +143,11 @@ async def chunk_and_embed(
     try:
         sentences = chunking_model.split_text(request.text)
         
-        return utils.embed_and_return_response(request_text=sentences, embed_model=embed_model, with_original_text=True)
+        return utils.embed_and_return_response(
+            request_text=sentences, 
+            embed_model=embed_model, 
+            sparse_model=sparse_model,
+            with_original_text=True
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error: " + str(e))

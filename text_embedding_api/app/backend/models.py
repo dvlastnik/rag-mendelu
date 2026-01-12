@@ -40,9 +40,14 @@ class ChunkBySimilarityResponse(BaseModel):
 ###########
 
 # Chunk and embed
+class SparseVectorData(BaseModel):
+    indices: List[int]
+    values: List[float]
+
 class ChunkAndEmbed(BaseModel):
     text: str
     embed_text: EmbedText
+    sparse_embedding: SparseVectorData
 
 class ChunkAndEmbedResponse(BaseModel):
     data: List[ChunkAndEmbed]
