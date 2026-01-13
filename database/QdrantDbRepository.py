@@ -67,10 +67,19 @@ class QdrantDbRepository(BaseDbRepository):
 
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=models.VectorParams(
-                    size=self.vector_size,
-                    distance=self.distance
-                )
+                vectors_config={
+                    "dense": models.VectorParams(
+                        size=self.vector_size,
+                        distance=self.distance
+                    )
+                },
+                sparse_vectors_config={
+                    "sparse": models.SparseVectorParams(
+                        index=models.SparseIndexParams(
+                            on_disk=True
+                        )
+                    )
+                }
             )
             self.logger.info("Collection created successfully.")
             return DbOperationResult(success=True)
@@ -78,44 +87,70 @@ class QdrantDbRepository(BaseDbRepository):
             self.logger.error(f"Failed to create collection: {e}")
             return DbOperationResult(success=False, message=str(e))
 
-    def search(self, text: str | List[str] | None = None, text_embedded: List[float] | List[List[float]] | None = None, n_results: int = 3) -> DbOperationResult:
+    def search(
+        self, 
+        text: str | List[str] | None = None,
+        text_embedded: List[float] | None = None,
+        sparse_embedded: Any | None = None,
+        n_results: int = 3
+    ) -> DbOperationResult:
         """
-        Searches the collection for similar vectors.
-        This implementation REQUIRES pre-computed embeddings.
+        Performs Hybrid Search.
+        Note: You need to pass the sparse query vector here too now.
         """
         if not self.client:
             return DbOperationResult(success=False, message="Client not connected")
         
         if text_embedded is None:
-            self.logger.error("QdrantDbRepository.search requires pre-computed embeddings. The 'text' field is not supported.")
-            return DbOperationResult(success=False, message="This repository requires the 'text_embedded' field.")
+            return DbOperationResult(success=False, message="Search requires 'text_embedded' (dense vector).")
 
         try:
+            search_query = text_embedded
+            prefetch = None
+
+            if sparse_embedded:
+                prefetch = [
+                    models.Prefetch(
+                        query=models.SparseVector(
+                            indices=sparse_embedded.indices,
+                            values=sparse_embedded.values
+                        ),
+                        using="sparse",
+                        limit=n_results * 2
+                    ),
+                    models.Prefetch(
+                        query=text_embedded,
+                        using="dense",
+                        limit=n_results * 2
+                    ),
+                ]
+                search_query = models.FusionQuery(fusion=models.Fusion.RRF)
+
             search_result = self.client.query_points(
                 collection_name=self.collection_name,
-                query=text_embedded,
+                prefetch=prefetch,
+                query=search_query if prefetch else text_embedded,
+                using="dense" if not prefetch else None,
                 limit=n_results,
                 with_payload=True
             )
             
             documents = []
             for point in search_result.points:
-                print(point)
                 metadata = point.payload.copy()
                 metadata['score'] = point.score
-
                 documents.append(
                     MyDocument(
                         id=point.id,
                         text=point.payload.get('text', ''), 
-                        embedding=[],
+                        embedding=[], 
                         metadata=metadata
                     )
                 )
             
             return DbOperationResult(success=True, data=documents)
         except Exception as e:
-            self.logger.error(f"Failed to search collection: {e}")
+            self.logger.error(f"Failed to search: {e}")
             traceback.print_exc()
             return DbOperationResult(success=False, message=str(e))
 
@@ -149,11 +184,21 @@ class QdrantDbRepository(BaseDbRepository):
             if not doc.embedding:
                 self.logger.warning(f"Skipping doc {doc.id}, no embedding found.")
                 continue
+
+            vector_payload = {
+                "dense": doc.embedding
+            }
+
+            if doc.sparse_embedding:
+                vector_payload["sparse"] = models.SparseVector(
+                    indices=doc.sparse_embedding.indices,
+                    values=doc.sparse_embedding.values
+                )
                 
             point = models.PointStruct(
                 id=str(doc.id),
-                vector=doc.embedding,
-                payload=doc.metadata  # Store all metadata
+                vector=vector_payload,
+                payload=doc.metadata
             )
             points.append(point)
             

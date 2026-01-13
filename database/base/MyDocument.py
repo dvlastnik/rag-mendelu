@@ -2,10 +2,16 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 
 @dataclass
+class SparseVector:
+    indices: List[int]
+    values: List[float]
+
+@dataclass
 class MyDocument():
     id: str
     text: str
     embedding: List[float] = None
+    sparse_embedding: SparseVector = None
     metadata: Dict = None
 
     @staticmethod

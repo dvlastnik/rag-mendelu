@@ -2,6 +2,7 @@ import uuid
 from typing import List, Union, Any
 
 from models import (
+    EmbedTextAndSparse,
     EmbedTextResponse, 
     EmbedTextRequest, 
     EmbedText, 
@@ -35,15 +36,24 @@ def embed_and_return_response(
         raise RuntimeError(f"Sparse Embedding failed: {e}")
 
     dense_embeddings = embed_model.encode(texts)
-    if not with_original_text:
-        print(sparse_results)
-        data = [
-            EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
-            for embedding in dense_embeddings
-        ]
-        return EmbedTextResponse(data=data, sparse_data=SparseVectorData(**sparse_results[0]))
 
     data = []
+    if not with_original_text:
+        for embedding, sparse_dict in zip(dense_embeddings, sparse_results):
+            sparse_data = SparseVectorData(**sparse_dict)
+            
+            data.append(
+                EmbedTextAndSparse(
+                    embed_text=EmbedText(
+                        uuid=str(uuid.uuid4()), 
+                        embeddings=embedding
+                    ),
+                    sparse_embedding=sparse_data
+                )
+            )
+
+        return EmbedTextResponse(data=data)
+
     for text, dense, sparse_dict in zip(texts, dense_embeddings, sparse_results):
         sparse_data = SparseVectorData(**sparse_dict)
 

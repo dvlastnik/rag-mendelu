@@ -1,6 +1,6 @@
 from enum import Enum
 import requests
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from utils.logging_config import get_logger
 from utils.Utils import Utils
@@ -13,28 +13,54 @@ class HttpMethod(Enum):
     DELETE = "DELETE"
     PUT = "PUT"
 
-class EmbeddingResponse:
-    def __init__(self, uuid, embedding):
-        self.uuid = uuid
-        self.embedding = embedding
-
-    def __str__(self):
-        return f"Uuid: {self.uuid}, Embedding: {self.embedding}"
+class SparseVectorData:
+    def __init__(self, indices: List[int], values: List[float]):
+        self.indices = indices
+        self.values = values
 
     @staticmethod
-    def from_dict(data: Dict) -> 'EmbeddingResponse':
+    def from_dict(data: Dict):
+        return SparseVectorData(indices=data.get('indices', []), values=data.get('values', []))
+
+class EmbeddingResponse:
+    def __init__(self, uuid: str, embedding: List[float], sparse: SparseVectorData | None = None):
+        self.uuid = uuid
+        self.embedding = embedding
+        self.sparse = sparse
+
+    def __str__(self):
+        return f"Uuid: {self.uuid}, Embedding: {self.embedding}, Sparse: {self.sparse}"
+
+    @staticmethod
+    def from_dict(data: Dict, sparse_data: Dict | None = None) -> 'EmbeddingResponse':
         if 'uuid' not in data.keys():
             raise ValueError(f"Uuid is missing in provided dictionary: {data}")
         if 'embeddings' not in data.keys():
             raise ValueError(f"Embeddings is missing in provided dictionary: {data}")
+        if sparse_data:
+            if 'indices' not in sparse_data.keys() or 'values' not in sparse_data.keys():
+                raise ValueError(f"Sparse_data is missing in provided dictionary: {data}")
+            return EmbeddingResponse(uuid=data.get('uuid', str), embedding=data.get('embeddings', list), sparse=SparseVectorData.from_dict(sparse_data))
         return EmbeddingResponse(uuid=data.get('uuid', str), embedding=data.get('embeddings', list))
     
     @staticmethod
-    def from_list_of_dicts(data: List[Dict]) -> List['EmbeddingResponse']:
+    def from_api_response(response: Dict[str, Any]) -> List['EmbeddingResponse']:
+        """
+        Parses the full API response dictionary.
+        Expected structure: { "data": [ { "embed_text": {...}, "sparse_embedding": {...} } ] }
+        """
         result: List['EmbeddingResponse'] = []
-
-        for d in data['data']:
-            result.append(EmbeddingResponse.from_dict(d))
+        
+        items = response.get('data', [])
+        for item in items:
+            dense_part = item.get('embed_text')
+            sparse_part = item.get('sparse_embedding')
+            
+            if dense_part and sparse_part:
+                obj = EmbeddingResponse.from_dict(dense_part, sparse_part)
+                result.append(obj)
+            else:
+                raise ValueError(f"Dense part of sparse part is missing: {item}")
 
         return result
     
@@ -50,15 +76,6 @@ class ChunkTextResponse:
         if 'sentences' not in data.keys():
             raise ValueError(f"sentences missing in provided dictionary: {data}")
         return ChunkTextResponse(sentences=data.get('sentences', list))
-    
-class SparseVectorData:
-    def __init__(self, indices: List[int], values: List[float]):
-        self.indices = indices
-        self.values = values
-
-    @staticmethod
-    def from_dict(data: Dict):
-        return SparseVectorData(indices=data.get('indices', []), values=data.get('values', []))
 
 class ChunkAndEmbedResponse:
     def __init__(self, text, embed_text: EmbeddingResponse, sparse_embedding: SparseVectorData):
@@ -117,7 +134,7 @@ class TextEmbeddingService:
             json=json_data
         )
 
-        return EmbeddingResponse.from_list_of_dicts(response)
+        return EmbeddingResponse.from_api_response(response)
 
     def get_embedding_with_uuid(self, data: List[str] | str, chunk_size=None) -> List[EmbeddingResponse]:
         result: List[EmbeddingResponse] = []
@@ -133,7 +150,6 @@ class TextEmbeddingService:
                 texts = {
                     'texts': [data]
                 }
-
             result = self._embed_text_and_return_result(texts)
         else:
             for i, chunk in enumerate(Utils.chunks(data, chunk_size)):

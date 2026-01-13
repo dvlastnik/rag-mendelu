@@ -5,7 +5,6 @@ from database.base.BaseDbRepository import BaseDbRepository
 # Import all available repository implementations
 from database.ChromaDbRepository import ChromaDbRepository
 from database.QdrantDbRepository import QdrantDbRepository
-from database.WeaviateDbRepository import WeaviateDbRepository
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -25,8 +24,6 @@ class DbRepositoryFactory:
             return ChromaDbRepository(ip=ip, port=port)
         elif type == QdrantDbRepository.name:
             return QdrantDbRepository(ip=ip, port=port)
-        elif type == WeaviateDbRepository.name:
-            return WeaviateDbRepository(ip=ip, port=port)
         
         raise Exception(f"{type} is not known. Maybe it exists, but it is not added to factory method in BaseDbRepository.")
 
@@ -64,23 +61,24 @@ class DbRepositoryFactory:
                 ip=ip,
                 port=qdrant_http_port,
                 grpc_port=qdrant_grpc_port,
+                collection_name="drough",
                 metadata=db_metadata
             )
         except Exception as e:
             logger.error(f"Failed to initialize QdrantDbRepository: {e}", exc_info=True)
 
-        try:
-            weaviate_port = int(os.environ.get("WEAVIATE_HTTP_PORT", 8080))
-            weaviate_grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
-            logger.debug(f"Initializing WeaviateDbRepository (Host: {ip}, Port: {weaviate_port})")
-            repositories[WeaviateDbRepository.name] = WeaviateDbRepository(
-                ip=ip,
-                port=weaviate_port,
-                grpc_port=weaviate_grpc_port,
-                metadata=db_metadata
-            )
-        except Exception as e:
-            logger.error(f"Failed to initialize WeaviateDbRepository: {e}", exc_info=True)
+        # try:
+        #     weaviate_port = int(os.environ.get("WEAVIATE_HTTP_PORT", 8080))
+        #     weaviate_grpc_port = int(os.environ.get("WEAVIATE_GRPC_PORT", 50051))
+        #     logger.debug(f"Initializing WeaviateDbRepository (Host: {ip}, Port: {weaviate_port})")
+        #     repositories[WeaviateDbRepository.name] = WeaviateDbRepository(
+        #         ip=ip,
+        #         port=weaviate_port,
+        #         grpc_port=weaviate_grpc_port,
+        #         metadata=db_metadata
+        #     )
+        # except Exception as e:
+        #     logger.error(f"Failed to initialize WeaviateDbRepository: {e}", exc_info=True)
 
         logger.debug(f"Factory created {len(repositories)} repository instances: {list(repositories.keys())}")
         return repositories

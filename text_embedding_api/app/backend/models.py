@@ -13,9 +13,12 @@ class EmbedText(BaseModel):
 class EmbedTextRequest(BaseModel):
     texts: List[str]
 
+class EmbedTextAndSparse(BaseModel):
+    embed_text: EmbedText
+    sparse_embedding: SparseVectorData
+
 class EmbedTextResponse(BaseModel):
-    data: List[EmbedText]
-    sparse_data: SparseVectorData
+    data: List[EmbedTextAndSparse]
 ###########
 
 # change-embedding-model

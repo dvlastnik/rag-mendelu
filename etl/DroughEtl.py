@@ -6,12 +6,10 @@ import pathlib
 import re
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter
-import lmstudio as lms
 import sys
 
-from database.ChromaDbRepository import ChromaDbRepository
 from etl.BaseEtl import BaseEtl, ETLState
-from database.base.MyDocument import MyDocument
+from database.base.MyDocument import MyDocument, SparseVector
 from text_embedding_api.TextEmbeddingService import ChunkAndEmbedResponse
 from metadata_extractor.LLMMetadataExtractor import LLMMetadataExtractor
 from metadata_extractor.models import DroughMetadata
@@ -23,6 +21,11 @@ class DroughEtl(BaseEtl):
     def __init__(self, filepath, db_repositories, embedding_service, metadata_extractor: LLMMetadataExtractor):
         super().__init__(filepath, db_repositories, embedding_service)
         self.metadata_extractor = metadata_extractor
+
+    def _sanitize_string(self, s: str) -> str:
+        if not isinstance(s, str): 
+            return str(s)
+        return s.encode('utf-8', 'replace').decode('utf-8')
 
     def _row_to_document(self, row):
         return super()._row_to_document(row)
@@ -92,14 +95,14 @@ class DroughEtl(BaseEtl):
         - Removes extra whitespace and stray backslashes.
         """
         text = doc.page_content
-        text = text.replace('<!-- image -->', '')
+        text = text.replace('', '')
         text = re.sub(r'^\s*(Figure|Source:).*$', '', text, flags=re.MULTILINE)
         text = re.sub(r'https?://\S+', '', text)
         text = text.replace('\xa0', ' ')
         text = re.sub(r'(\w)-\n(\w)', r'\1\2', text)
         text = re.sub(r'^\s*\d+\s*$', '', text, flags=re.MULTILINE)
-        text = re.sub(r'\. \d{1,3}\b', '. ', text) # For "...2022. 22" or "...did. 5 Real-time..."
-        text = re.sub(r',\s\d{1,3}\b', ', ', text) # For "...in 2021, 138 this..."
+        text = re.sub(r'\. \d{1,3}(?=\s+[A-Z])', '.', text) 
+        text = re.sub(r',\s\d{1,3}(?=\s)', ',', text)
         text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
         text = re.sub(r'\n{2,}', '\n', text)
         text = re.sub(r'\[[0-9]{1,3}\]', '', text) 
@@ -130,137 +133,117 @@ class DroughEtl(BaseEtl):
 
         return splitted_md
     
-    def _extract_metadata_for_chunk(self, chunk: ChunkAndEmbedResponse, base_metadata: Dict) -> MyDocument | None:
-        if len(chunk.text) < 50:
-            return None
+    def _extract_section_metadata(self, text: str, existing_metadata: Dict) -> Dict:
+        """
+        Calls LLM to extract metadata for the whole section (document) 
+        and merges it with existing header metadata.
+        """
         try:
-            # concatenate metadata/dicts together
-            final_metadata = base_metadata.copy()
+            extracted_metadata_obj = self.metadata_extractor.extract_metadata(
+                prompt=DroughMetadata.DROUGH_METADATA_PROMPT.format(input_text=text[:4000]), # Truncate to be safe if section is huge
+                response_scheme=DroughMetadata.DroughMetadata
+            )
+            extracted_metadata = extracted_metadata_obj.model_dump()
             
-            # ask llm for metadata
-            extracted_metadata = self.metadata_extractor.extract_metadata(prompt=DroughMetadata.DROUGH_METADATA_PROMPT.format(input_text=chunk.text), response_scheme=DroughMetadata.DroughMetadata)
-            final_metadata = final_metadata | extracted_metadata
+            final_metadata = existing_metadata.copy() | extracted_metadata
+
+            processed_metadata = {}
             for key, value in final_metadata.items():
                 if isinstance(value, str):
-                    final_metadata[key] = value.lower()
+                    processed_metadata[key] = self._sanitize_string(value.lower())
                 elif isinstance(value, list):
-                    lower_strings = []
-                    for string_value in final_metadata[key]:
-                        if isinstance(string_value, str):
-                            lower_strings.append(string_value.lower())
-                        else:
-                            lower_strings.append(str(lower_strings).lower())
-                    final_metadata[key] = lower_strings
-
-            final_metadata['source'] = self.file.stem
-            final_metadata['text'] = chunk.text
-
-            def sanitize_string(s: str) -> str:
-                """Replaces invalid UTF-8 surrogates with '' (or '?')."""
-                # 'replace' substitutes invalid chars, preventing the error.
-                return s.encode('utf-8', 'replace').decode('utf-8')
-
-            sanitized_text = sanitize_string(chunk.text)
-            
-            for key, value in final_metadata.items():
-                if isinstance(value, str):
-                    final_metadata[key] = sanitize_string(value)
-                elif isinstance(value, list):
-                    final_metadata[key] = [
-                        sanitize_string(item) if isinstance(item, str) else item
+                    processed_metadata[key] = [
+                        self._sanitize_string(str(item).lower()) 
                         for item in value
                     ]
+                else:
+                    processed_metadata[key] = value
+            processed_metadata['source'] = self.file.stem
+            
+            return processed_metadata
+
+        except Exception as e:
+            logger.error(f"LLM Metadata extraction failed: {e}")
+            return existing_metadata
+    
+    def _create_document_from_chunk(self, chunk: ChunkAndEmbedResponse, full_metadata: Dict) -> MyDocument | None:
+        if len(chunk.text) < 50:
+            return None
+        
+        try:
+            chunk_metadata = full_metadata.copy()
+
+            sanitized_text = self._sanitize_string(chunk.text)
+            chunk_metadata['text'] = chunk.text
+
+            sparse_vec = None
+            if chunk.sparse_embedding:
+                sparse_vec = SparseVector(chunk.sparse_embedding.indices, chunk.sparse_embedding.values)
 
             return MyDocument(
                 id=chunk.embed_text.uuid,
                 text=sanitized_text,
                 embedding=chunk.embed_text.embedding,
-                metadata=final_metadata
+                sparse_embedding=sparse_vec,
+                metadata=chunk_metadata
             )
     
-        except IndentationError as ie:
-            logger.error(f"Chat response: {extracted_metadata}")
-            logger.info(f"Chunked text length {len(chunk.text)}: {chunk.text}")
-            logger.error(f"Error during extract_metadata_for_chunk: {ie}")
+        except Exception as e:
+            logger.error(f"Error creating MyDocument: {e}")
             traceback.print_exc()
-            sys.exit(1)
-            self.state = ETLState.FAILED
+            return None
 
-    # TODO: Asi fajn napad, kdyz narazi na tabulku, tak to posle do llm a sumarizuje
-    # def _summarize_tables_if_present(self, text: str, model: lms.LLM) -> str:
-    #     pass
-
-    def _process_document(self, doc: Document) -> List[MyDocument]:
-        logger.debug(f" Cleaning doc... {len(doc.page_content)}")
-        doc = self.clean_document_text(doc)
-        logger.debug(f" Cleaned doc {len(doc.page_content)}")
-        if len(doc.page_content) < 50:
+    def _process_document(self, text: str, metadata: Dict) -> List[MyDocument]:
+        if len(text) < 50:
             return []
 
         processed_chunks = []
-        logger.debug(f" Sending {len(doc.page_content)} length for chunk and embed")
-        chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=doc.page_content)
-        logger.debug(f" Chunk and embed result {len(chunk_and_embed_result)}")
+        logger.debug(f" Sending {len(text)} chars to ChunkAndEmbed API")
+        chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=text)
         
         for chunk in chunk_and_embed_result:
             chunk.text = chunk.text.lstrip(',')
-
-            final_document = self._extract_metadata_for_chunk(chunk, doc.metadata)
+            
+            final_document = self._create_document_from_chunk(chunk, metadata)
             if final_document:
                 processed_chunks.append(final_document)
 
         return processed_chunks
 
     def transform(self) -> None:
-
         try:
-            # setup md
             raw_documents = self._load_and_split_markdown()
             documents = self.filter_unwanted_pages(raw_documents)
-            #topics = set()
+
+            total_docs = len(documents)
+            logger.info(f"Starting transform for {total_docs} sections...")
 
             for i, doc in enumerate(documents):
-                index = i+1
-                size = len(documents)
+                index = i + 1
+                
+                cleaned_doc = self.clean_document_text(doc)
+                if len(cleaned_doc.page_content) < 50: 
+                    continue
 
-                logger.info(f"{index}/{size}. transforming document...")
-                processed_docs = self._process_document(doc)
+                logger.info(f"[{index}/{total_docs}] Processing section...")
+
+                enhanced_metadata = self._extract_section_metadata(
+                    text=cleaned_doc.page_content, 
+                    existing_metadata=cleaned_doc.metadata
+                )
+
+                processed_docs = self._process_document(cleaned_doc.page_content, enhanced_metadata)
+                
                 if processed_docs:
                     self.documents.extend(processed_docs)
-                    logger.info(f"{index}/{size}. transformed document (found {len(processed_docs)} chunks)")
-                    logger.info(f"Current size of documents: {len(self.documents)}")
-                    #topics.update(doc.metadata['topics'])
+                    logger.debug(f" -> Generated {len(processed_docs)} chunks.")
 
-            # ONE POSSIBLE UPGRADE
-            # logger.info("Optimalizing metadata for each document...")
-            # for doc in self.documents:
-            #     chat = lms.Chat(USER_METADATA_PERSONA)
-            #     chat.add_user_message(METADATA_UPDATE_PROMPT.format(topics_list=topics, doc_sentence=doc.text, doc_metadata=doc.metadata['topics']))
-            #     chat_response = model.respond(chat)
-
-            #     print()
-            #     logger.info(f"Chat response: {chat_response}")
-            #     chat_response = eval(chat_response)
-            #     logger.info(f"Topics original: {doc.metadata['topics']}")
-            #     diff = set(chat_response) - set(doc.metadata['topics'])
-            #     logger.info(f"Difference: {list(diff)}")
-            #     print()
-            logger.info(f"File: {self.file} was transformed!")
-            logger.info(f"Number of documents: {len(self.documents)}")
+            logger.info(f"File: {self.file} transformed! Total chunks: {len(self.documents)}")
             self.state = ETLState.TRANSFORMED
             return
+
         except Exception as e:
             logger.exception(f"Error during transform step: {e}")
             traceback.print_exc()
             self.state = ETLState.FAILED
             return
-
-
-        
-
-
-        
-
-        
-    
-    
