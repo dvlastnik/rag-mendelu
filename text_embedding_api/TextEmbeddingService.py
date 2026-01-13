@@ -51,10 +51,20 @@ class ChunkTextResponse:
             raise ValueError(f"sentences missing in provided dictionary: {data}")
         return ChunkTextResponse(sentences=data.get('sentences', list))
     
+class SparseVectorData:
+    def __init__(self, indices: List[int], values: List[float]):
+        self.indices = indices
+        self.values = values
+
+    @staticmethod
+    def from_dict(data: Dict):
+        return SparseVectorData(indices=data.get('indices', []), values=data.get('values', []))
+
 class ChunkAndEmbedResponse:
-    def __init__(self, text, embed_text: EmbeddingResponse):
+    def __init__(self, text, embed_text: EmbeddingResponse, sparse_embedding: SparseVectorData):
         self.text = text
         self.embed_text = embed_text
+        self.sparse_embedding = sparse_embedding
     
     def __str__(self):
         return f"Text: {self.text}, Embed Text dict: {self.embed_text}"
@@ -63,7 +73,12 @@ class ChunkAndEmbedResponse:
     def from_dict(data: Dict) -> 'ChunkAndEmbedResponse':
         if any(key not in data.keys() for key in ['text', 'embed_text']):
             raise ValueError(f"Text or embed_text is missing in dictionary: {data}")
-        return ChunkAndEmbedResponse(text=data.get('text', str), embed_text=EmbeddingResponse.from_dict(data.get('embed_text', dict)))
+        
+        return ChunkAndEmbedResponse(
+            text=data.get('text', str), 
+            embed_text=EmbeddingResponse.from_dict(data.get('embed_text', dict)),
+            sparse_embedding=SparseVectorData.from_dict(data.get('sparse_embedding', dict))
+        )
     
     @staticmethod
     def from_dict_list(data: Dict) -> List['ChunkAndEmbedResponse']:

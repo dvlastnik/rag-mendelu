@@ -62,12 +62,16 @@ async def set_embedding_service(service_name: str = Query(..., description="Name
     response_model=EmbedTextResponse, 
     responses={400: {"description": "Bad Request - No text provided"}}
 )
-async def embed_text(request: EmbedTextRequest, embed_model: BaseEmbeddingModelService = Depends(get_embedding_service)):
+async def embed_text(
+    request: EmbedTextRequest, 
+    embed_model: BaseEmbeddingModelService = Depends(get_embedding_service),
+    sparse_model: SparseEmbeddingService = Depends(get_sparse_service)
+):
     if not request.texts:
         raise HTTPException(status_code=400, detail="No text to embed provided")
     
     try:
-        return utils.embed_and_return_response(request_text=request.texts, embed_model=embed_model, sparse_model=None)
+        return utils.embed_and_return_response(request_text=request.texts, embed_model=embed_model, sparse_model=sparse_model)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error: " + str(e))
 

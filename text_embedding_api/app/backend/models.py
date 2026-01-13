@@ -1,6 +1,10 @@
 from pydantic import BaseModel
 from typing import List
 
+class SparseVectorData(BaseModel):
+    indices: List[int]
+    values: List[float]
+
 # embed-text
 class EmbedText(BaseModel):
     uuid: str
@@ -11,7 +15,7 @@ class EmbedTextRequest(BaseModel):
 
 class EmbedTextResponse(BaseModel):
     data: List[EmbedText]
-
+    sparse_data: SparseVectorData
 ###########
 
 # change-embedding-model
@@ -40,10 +44,6 @@ class ChunkBySimilarityResponse(BaseModel):
 ###########
 
 # Chunk and embed
-class SparseVectorData(BaseModel):
-    indices: List[int]
-    values: List[float]
-
 class ChunkAndEmbed(BaseModel):
     text: str
     embed_text: EmbedText

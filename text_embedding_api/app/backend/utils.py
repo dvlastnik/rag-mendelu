@@ -29,18 +29,19 @@ def embed_and_return_response(
     if not texts:
         return ChunkAndEmbedResponse(data=[]) if with_original_text else EmbedTextResponse(data=[])
 
-    dense_embeddings = embed_model.encode(texts)
-    if not with_original_text:
-        data = [
-            EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
-            for embedding in dense_embeddings
-        ]
-        return EmbedTextResponse(data=data)
-    
     try:
         sparse_results = list(sparse_model.embed(texts))
     except Exception as e:
         raise RuntimeError(f"Sparse Embedding failed: {e}")
+
+    dense_embeddings = embed_model.encode(texts)
+    if not with_original_text:
+        print(sparse_results)
+        data = [
+            EmbedText(uuid=str(uuid.uuid4()), embeddings=embedding)
+            for embedding in dense_embeddings
+        ]
+        return EmbedTextResponse(data=data, sparse_data=SparseVectorData(**sparse_results[0]))
 
     data = []
     for text, dense, sparse_dict in zip(texts, dense_embeddings, sparse_results):
