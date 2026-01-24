@@ -95,19 +95,6 @@ uv run main.py --check-dbs
 6. **Embed**: Generate vectors (Dense + Sparse).
 7. **Store**: Push payload and vectors to Qdrant.
 
-```mermaid
-flowchart LR
-    step1[Load PDF] --> step2[Parse Layout]
-    step2 --> step3[Clean Text]
-    step3 --> step4[Structure Sections]
-    step4 --> step5[Extract Metadata]
-    step5 --> step6[Embed Vectors]
-    step6 --> step7[Store in Qdrant]
-    
-    style step1 fill:#e1f5fe,stroke:#01579b
-    style step7 fill:#e8f5e9,stroke:#2e7d32
-```
-
 ### Agentic RAG Flow
 When you ask a question, a team of agents collaborates:
 - **Router**: Decides if the question needs database retrieval or general knowledge.
@@ -128,7 +115,6 @@ graph TD
     grader(Retrieval Grader)
     hallucination(Hallucination Grader)
     synth(Synthesizer)
-    error(Error Agent)
     End([End]):::last
 
     %% Flow
@@ -140,7 +126,6 @@ graph TD
     rewriter --> extractor
     
     extractor -.->|Success| worker
-    extractor -.->|Error| error
     
     worker --> grader
     grader --> synth
@@ -148,7 +133,6 @@ graph TD
     
     hallucination --> End
     general --> End
-    error --> End
 
     %% Styling
     classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
