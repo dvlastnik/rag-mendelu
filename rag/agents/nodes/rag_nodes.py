@@ -217,7 +217,8 @@ class RagNodes:
     
     def hallucination_grader_agent(self, state: AgentState):
         logger.info("--- CHECKING FOR HALLUCINATIONS ---")
-        documents = state.get('search_results')
+        current_retries = state.get('hallucination_retries', 0)
+        documents = state.get('filtered_results', [])
         generated_answer = state['messages'][-1].content
         context = '\n'.join(documents)
 
@@ -241,7 +242,10 @@ class RagNodes:
             return {'hallucination_status': 'clean'}
         else:
             logger.info('--- DECISION: HALLUCINATION DETECTED ---')
-            return {'hallucination_status': 'hallucinated'}
+            return {
+                'hallucination_status': 'hallucinated',
+                'hallucination_retries': current_retries + 1
+            }
 
     def error_agent(self, state: AgentState):
         logger.info("--- ERROR ---")
@@ -259,8 +263,15 @@ class RagNodes:
         ]
     
     @staticmethod
-    def route_hallucination(state: AgentState):
+    def route_hallucination(state: AgentState) -> Literal[NodeName.SYNTHESIZER, END]: # type: ignore
+        MAX_RETRIES = 3
         status = state.get('hallucination_status')
+        retries = state.get("hallucination_retries", 0)
+
         if status == 'hallucinated':
+            if retries >= MAX_RETRIES:
+                logger.warning(f"Max retries ({MAX_RETRIES}) reached. Stopping infinite loop.")
+                return END 
+            
             return NodeName.SYNTHESIZER
         return END

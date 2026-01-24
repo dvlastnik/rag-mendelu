@@ -56,6 +56,14 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     builder.add_edge(NodeName.RETRIEVAL_GRADER_AGENT, NodeName.SYNTHESIZER)
     builder.add_edge(NodeName.SYNTHESIZER, NodeName.HALLUCINATION_GRADER_AGENT)
 
+    builder.add_conditional_edges(
+        NodeName.HALLUCINATION_GRADER_AGENT,
+        rag_nodes.route_hallucination,
+        path_map={
+            NodeName.SYNTHESIZER: NodeName.SYNTHESIZER,
+            END: END
+        }
+    )
 
     builder.add_edge(NodeName.SYNTHESIZER, END)
     

@@ -117,25 +117,15 @@ graph TD
     synth(Synthesizer)
     End([End]):::last
 
-    %% Flow
-    Start --> router
-    
+    Start --> router    
     router -.->|General| general
     router -.->|RAG| rewriter
-    
     rewriter --> extractor
-    
     extractor -.->|Success| worker
-    
     worker --> grader
     grader --> synth
     synth --> hallucination
-    
-    hallucination --> End
+    hallucination -.->|Grounded| End
+    hallucination -.->|Hallucinated| synth
     general --> End
-
-    %% Styling
-    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
-    classDef first fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef last fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
 ```

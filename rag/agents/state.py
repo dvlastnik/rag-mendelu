@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     filtered_results: List[str]
     rewritten_query: str
     hallucination_status: str
+    hallucination_retries: int
     
 class WorkerState(TypedDict):
     target: ExtractionScheme
