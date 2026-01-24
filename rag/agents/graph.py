@@ -1,0 +1,66 @@
+from langgraph.graph import StateGraph, START, END
+from langchain.chat_models import init_chat_model
+
+from rag.agents.state import AgentState
+from rag.agents.enums import NodeName
+from rag.agents.nodes.general_nodes import GeneralNodes
+from rag.agents.nodes.rag_nodes import RagNodes
+
+from database.base.BaseDbRepository import BaseDbRepository
+from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from utils.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbeddingService, model_name: str = 'llama3.1:8b'):
+    llm = init_chat_model(
+        model=model_name,
+        model_provider='ollama',
+        temperature=0
+    )
+    
+    router_nodes = GeneralNodes(llm)
+    rag_nodes = RagNodes(llm, database_service, embedding_service)
+
+    builder = StateGraph(AgentState)
+    # general
+    builder.add_node(NodeName.ROUTER, router_nodes.router_agent)
+    builder.add_node(NodeName.GENERAL, router_nodes.general_agent)
+    # rag
+    builder.add_node(NodeName.QUERY_REWRITER, rag_nodes.query_rewriter_agent)
+    builder.add_node(NodeName.EXTRACTOR, rag_nodes.extractor_agent)
+    builder.add_node(NodeName.RESEARCH_WORKER, rag_nodes.research_worker)
+    builder.add_node(NodeName.RETRIEVAL_GRADER_AGENT, rag_nodes.retrieval_grader_agent)
+    builder.add_node(NodeName.HALLUCINATION_GRADER_AGENT, rag_nodes.hallucination_grader_agent)
+    builder.add_node(NodeName.SYNTHESIZER, rag_nodes.synthesizer_agent)
+    builder.add_node(NodeName.ERROR, rag_nodes.error_agent)
+
+    builder.add_edge(START, NodeName.ROUTER)
+    # general
+    builder.add_conditional_edges(
+        NodeName.ROUTER,
+        GeneralNodes.route_intent, 
+        path_map={NodeName.QUERY_REWRITER: NodeName.QUERY_REWRITER, NodeName.GENERAL: NodeName.GENERAL}
+    )
+    builder.add_edge(NodeName.GENERAL, END)
+    # rag
+    builder.add_edge(NodeName.QUERY_REWRITER, NodeName.EXTRACTOR)
+    builder.add_conditional_edges(
+        NodeName.EXTRACTOR,
+        RagNodes.validate_and_map,
+        path_map={NodeName.RESEARCH_WORKER: NodeName.RESEARCH_WORKER, NodeName.ERROR: NodeName.ERROR}
+    )
+    builder.add_edge(NodeName.ERROR, END)
+
+    builder.add_edge(NodeName.RESEARCH_WORKER, NodeName.RETRIEVAL_GRADER_AGENT)
+    builder.add_edge(NodeName.RETRIEVAL_GRADER_AGENT, NodeName.SYNTHESIZER)
+    builder.add_edge(NodeName.SYNTHESIZER, NodeName.HALLUCINATION_GRADER_AGENT)
+
+
+    builder.add_edge(NodeName.SYNTHESIZER, END)
+    
+
+    graph = builder.compile()
+
+    print(graph.get_graph().draw_mermaid())
+    return graph

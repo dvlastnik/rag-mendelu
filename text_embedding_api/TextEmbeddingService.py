@@ -189,7 +189,7 @@ class TextEmbeddingService:
             method=HttpMethod.POST,
             endpoint="/chunk-and-embed",
             json=json,
-            timeout=20
+            timeout=120
         )
 
         return ChunkAndEmbedResponse.from_dict_list(response)

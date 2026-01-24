@@ -6,6 +6,7 @@ from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from database.base.MyDocument import MyDocument
 from database.base.DbOperationResult import DbOperationResult
 from database.base.BaseDbRepository import BaseDbRepository
+from utils.logging_config import highlight_log
 
 class QdrantDbRepository(BaseDbRepository):
     name = 'qdrant'
@@ -36,19 +37,19 @@ class QdrantDbRepository(BaseDbRepository):
     def connect(self) -> DbOperationResult:
         """Connects to the Qdrant gRPC client."""
         try:
-            self.logger.info(f"Connecting to Qdrant at {self.ip}:{self.port}...")
+            self.logger.info(f'Connecting to Qdrant at {self.ip}:{self.port}...')
             # Using gRPC port by default as it's faster for service-to-service
             self.client = QdrantClient(host=self.ip, port=self.port, grpc_port=self.grpc_port)
-            self.logger.info("Qdrant connection successful.")
+            self.logger.info('Qdrant connection successful.')
             return DbOperationResult(success=True)
         except Exception as e:
-            self.logger.error(f"Failed to connect to Qdrant: {e}")
+            self.logger.error(f'Failed to connect to Qdrant: {e}')
             return DbOperationResult(success=False, message=str(e))
 
     def if_collection_exist_delete(self) -> DbOperationResult:
         """Checks if the collection exists and deletes it if it does."""
         if not self.client:
-            return DbOperationResult(success=False, message="Client not connected")
+            return DbOperationResult(success=False, message='Client not connected')
         try:
             if self.client.collection_exists(self.collection_name):
                 self.logger.warning(f"Collection '{self.collection_name}' already exists. Deleting.")
@@ -61,37 +62,71 @@ class QdrantDbRepository(BaseDbRepository):
     def create_collection(self) -> DbOperationResult:
         """Creates a new collection with the specified vector config."""
         if not self.client:
-            return DbOperationResult(success=False, message="Client not connected")
+            return DbOperationResult(success=False, message='Client not connected')
         try:
             self.logger.info(f"Creating collection '{self.collection_name}'...")
 
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config={
-                    "dense": models.VectorParams(
+                    'dense': models.VectorParams(
                         size=self.vector_size,
                         distance=self.distance
                     )
                 },
                 sparse_vectors_config={
-                    "sparse": models.SparseVectorParams(
+                    'sparse': models.SparseVectorParams(
                         index=models.SparseIndexParams(
                             on_disk=True
                         )
                     )
                 }
             )
-            self.logger.info("Collection created successfully.")
+            self.logger.info('Collection created successfully.')
             return DbOperationResult(success=True)
         except Exception as e:
-            self.logger.error(f"Failed to create collection: {e}")
+            self.logger.error(f'Failed to create collection: {e}')
             return DbOperationResult(success=False, message=str(e))
+
+    def _build_qdrant_filter(self, filter_dict: Dict[str, Any] | None) -> models.Filter | None:
+        """
+        Converts a simple python dictionary (e.g. {'country': 'italy', 'year': '2023'})
+        into a Qdrant Filter object.
+        """
+        if not filter_dict:
+            return None
+        
+        must_conditions = []
+        for key, value in filter_dict.items():
+            if value in [None, '']:
+                continue
+            
+            if isinstance(value, list):
+                must_conditions.append(
+                    models.FieldCondition(
+                        key=key,
+                        match=models.MatchAny(any=value)
+                    )
+                )
+            else:
+                must_conditions.append(
+                    models.FieldCondition(
+                        key=key,
+                        match=models.MatchValue(value=value)
+                    )
+                )
+        
+        if not must_conditions:
+            return None
+            
+        return models.Filter(must=must_conditions)
 
     def search(
         self, 
         text: str | List[str] | None = None,
         text_embedded: List[float] | None = None,
         sparse_embedded: Any | None = None,
+        filter_dict: Dict[str, Any] | None = None,
         n_results: int = 3
     ) -> DbOperationResult:
         """
@@ -99,12 +134,22 @@ class QdrantDbRepository(BaseDbRepository):
         Note: You need to pass the sparse query vector here too now.
         """
         if not self.client:
-            return DbOperationResult(success=False, message="Client not connected")
+            return DbOperationResult(success=False, message='Client not connected')
         
         if text_embedded is None:
             return DbOperationResult(success=False, message="Search requires 'text_embedded' (dense vector).")
 
+        highlight_log(self.logger, f'Qdrant Search Start')
+        self.logger.info(f'Raw Filter Dict: {filter_dict}')
+        if text_embedded:
+            self.logger.debug(f'Dense Vector Dim: {len(text_embedded)} (Preview: {text_embedded[:3]}...)')
+        if sparse_embedded:
+            self.logger.debug(f'Sparse Vector Indices: {len(sparse_embedded.indices)}')
+
         try:
+            q_filter = self._build_qdrant_filter(filter_dict)
+            self.logger.info(f'Constructed Qdrant Filter: {q_filter}')
+
             search_query = text_embedded
             prefetch = None
 
@@ -115,12 +160,14 @@ class QdrantDbRepository(BaseDbRepository):
                             indices=sparse_embedded.indices,
                             values=sparse_embedded.values
                         ),
-                        using="sparse",
+                        using='sparse',
+                        filter=q_filter,
                         limit=n_results * 2
                     ),
                     models.Prefetch(
                         query=text_embedded,
-                        using="dense",
+                        using='dense',
+                        filter=q_filter,
                         limit=n_results * 2
                     ),
                 ]
@@ -130,11 +177,16 @@ class QdrantDbRepository(BaseDbRepository):
                 collection_name=self.collection_name,
                 prefetch=prefetch,
                 query=search_query if prefetch else text_embedded,
-                using="dense" if not prefetch else None,
+                using='dense' if not prefetch else None,
                 limit=n_results,
+                query_filter=q_filter if not prefetch else None,
                 with_payload=True
             )
             
+            self.logger.info(f'Search Result Count: {len(search_result.points)}')
+            if len(search_result.points) == 0:
+                self.logger.warning(f'⚠️ WARNING: 0 documents found.')
+
             documents = []
             for point in search_result.points:
                 metadata = point.payload.copy()
@@ -148,7 +200,9 @@ class QdrantDbRepository(BaseDbRepository):
                     )
                 )
             
+            highlight_log(self.logger, f'Qdrant Search Start', only_char=True)
             return DbOperationResult(success=True, data=documents)
+            
         except Exception as e:
             self.logger.error(f"Failed to search: {e}")
             traceback.print_exc()

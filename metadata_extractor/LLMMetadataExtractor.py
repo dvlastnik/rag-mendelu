@@ -16,7 +16,7 @@ class LLMMetadataExtractor:
 
     def __init__(self, llm_handler: LLMHandler):
         self.llm_handler = llm_handler
-        self.model_name = "llama3.2:3b" 
+        self.model_name = 'ibm/granite4:1b'
         self.llm_handler.load_model(self.model_name)
 
     def extract_metadata(self, prompt: str, response_scheme: Type[T]) -> T:

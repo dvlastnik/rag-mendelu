@@ -1,12 +1,11 @@
-import json
 import traceback
+import httpx
 from typing import List, Tuple, Optional, Dict
-import pandas as pd
+from collections import Counter
 import pathlib
 import re
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter
-import sys
 
 from etl.BaseEtl import BaseEtl, ETLState
 from database.base.MyDocument import MyDocument, SparseVector
@@ -133,33 +132,96 @@ class DroughEtl(BaseEtl):
 
         return splitted_md
     
+    def _merge_metadata_dicts(self, results: List[Dict]) -> Dict:
+        """
+        Helper to merge multiple extraction results.
+        - Lists (cities): Union of all found items.
+        - Singletons (year): Most frequent value (Voting) OR collect all unique.
+        """
+        merged = {}
+        
+        if not results: return {}
+        keys = results[0].keys()
+
+        for key in keys:
+            values = [r.get(key) for r in results if r.get(key) not in [None, [], ""]]
+            
+            if not values:
+                merged[key] = None
+                continue
+
+            first_val = values[0]
+            if isinstance(first_val, list):
+                combined = []
+                for v_list in values:
+                    combined.extend(v_list)
+                merged[key] = list(set(combined))
+                
+            else:
+                str_values = [str(v) for v in values]
+                most_common = Counter(str_values).most_common(1)[0][0]
+                merged[key] = most_common
+
+        return merged
+    
     def _extract_section_metadata(self, text: str, existing_metadata: Dict) -> Dict:
         """
-        Calls LLM to extract metadata for the whole section (document) 
-        and merges it with existing header metadata.
+        Extracts metadata by segmenting long text to fit smaller model context,
+        then aggregates the results.
         """
         try:
-            extracted_metadata_obj = self.metadata_extractor.extract_metadata(
-                prompt=DroughMetadata.DROUGH_METADATA_PROMPT.format(input_text=text[:4000]), # Truncate to be safe if section is huge
-                response_scheme=DroughMetadata.DroughMetadata
-            )
-            extracted_metadata = extracted_metadata_obj.model_dump()
+            segment_size = 2000
+            overlap = 100
             
-            final_metadata = existing_metadata.copy() | extracted_metadata
+            if len(text) <= segment_size:
+                segments = [text]
+            else:
+                segments = []
+                start = 0
+                while start < len(text):
+                    end = min(start + segment_size, len(text))
+                    segments.append(text[start:end])
+                    start += (segment_size - overlap)
+
+            extracted_objects = []
+            for i, segment in enumerate(segments):
+                try:
+                    meta_obj = self.metadata_extractor.extract_metadata(
+                        prompt=DroughMetadata.DROUGH_METADATA_PROMPT.format(input_text=segment),
+                        response_scheme=DroughMetadata.DroughMetadata
+                    )
+                    extracted_objects.append(meta_obj.model_dump())
+
+                except (TimeoutError, httpx.ReadTimeout, httpx.ConnectTimeout):
+                    logger.error(f"   [Segment {i+1}] OLLAMA TIMEOUT. Skipping segment.")
+                    break
+                except Exception as e:
+                    logger.error(f"   [Segment {i+1}] General Error: {e}")
+                    continue
+
+            if not extracted_objects:
+                logger.warning("No metadata extracted from any segment.")
+                return existing_metadata
+
+            aggregated_data = self._merge_metadata_dicts(extracted_objects)
+            final_metadata = existing_metadata.copy() | aggregated_data
 
             processed_metadata = {}
             for key, value in final_metadata.items():
+                if value is None:
+                    continue
+                    
                 if isinstance(value, str):
                     processed_metadata[key] = self._sanitize_string(value.lower())
                 elif isinstance(value, list):
-                    processed_metadata[key] = [
+                    processed_metadata[key] = sorted(list(set([
                         self._sanitize_string(str(item).lower()) 
                         for item in value
-                    ]
+                    ])))
                 else:
                     processed_metadata[key] = value
-            processed_metadata['source'] = self.file.stem
             
+            processed_metadata['source'] = self.file.stem
             return processed_metadata
 
         except Exception as e:
@@ -225,7 +287,7 @@ class DroughEtl(BaseEtl):
                 if len(cleaned_doc.page_content) < 50: 
                     continue
 
-                logger.info(f"[{index}/{total_docs}] Processing section...")
+                logger.info(f"[{index}/{total_docs}] Processing section of length: {len(cleaned_doc.page_content)}...")
 
                 enhanced_metadata = self._extract_section_metadata(
                     text=cleaned_doc.page_content, 

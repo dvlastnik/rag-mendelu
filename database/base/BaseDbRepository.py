@@ -17,10 +17,11 @@ class BaseDbRepository(ABC):
         self.metadata = metadata
         self.logger = get_logger(self.name)
 
-    def connect_and_create_collection(self):
+    def connect_and_create_collection(self, delete_collection: bool):
         execute_and_check_db_operation(operation=self.connect, operation_description=f".connect() {self.name}")
-        execute_and_check_db_operation(operation=self.if_collection_exist_delete, operation_description=f"if_collection_exist_delete {self.name}")
-        self.create_collection()
+        if delete_collection:
+            execute_and_check_db_operation(operation=self.if_collection_exist_delete, operation_description=f"if_collection_exist_delete {self.name}")
+            self.create_collection()
 
     @abstractmethod
     def connect(self) -> DbOperationResult:
@@ -31,7 +32,14 @@ class BaseDbRepository(ABC):
         pass
 
     @abstractmethod
-    def search(self, text: str | List[str] | None = None, text_embedded: List[int] | List[List[int]] | None=None, n_results: int=3) -> DbOperationResult:
+    def search(
+        self, 
+        text: str | List[str] | None = None,
+        text_embedded: List[float] | None = None,
+        sparse_embedded: Any | None = None,
+        filter_dict: Dict[str, Any] | None = None,
+        n_results: int = 3
+    ) -> DbOperationResult:
         pass
 
     @abstractmethod

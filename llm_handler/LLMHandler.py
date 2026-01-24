@@ -39,7 +39,11 @@ class LLMHandler:
             model=model_name,
             base_url=self.base_url,
             temperature=temperature,
-            keep_alive="5m"
+            num_predict=512,
+            keep_alive="5m",
+            client_kwargs={
+                "timeout": 120.0
+            }
         )
         logger.info(f"Model {model_name} is ready for inference.")
 

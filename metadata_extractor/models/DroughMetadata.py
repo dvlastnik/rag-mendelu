@@ -14,6 +14,9 @@ You are an advanced entity extraction system. Analyze the input text and extract
    - Extract all mentioned cities.
    - **NORMALIZE:** Expand common abbreviations (e.g., "NYC" -> "New York City", "LA" -> "Los Angeles").
 
+3. **Years**:
+   - Extract all mentioned years.
+
 3. **Exclusions**:
    - Ignore names of people even if they match location names (e.g., ignore "Jordan" or "Chelsea" if they refer to people).
 
@@ -26,5 +29,15 @@ You are an advanced entity extraction system. Analyze the input text and extract
 """
 
 class DroughMetadata(pydantic.BaseModel):
-    countries: List[str]
-    cities: List[str]
+   countries: List[str] = pydantic.Field(
+        default_factory=list, 
+        description="List of countries mentioned in the text."
+    )
+   cities: List[str] = pydantic.Field(
+        default_factory=list, 
+        description="List of cities mentioned in the text."
+    )
+   years: List[str] = pydantic.Field(
+        default_factory=list, 
+        description="List of specific years mentioned (e.g., '2022', '1990-2000')."
+    )

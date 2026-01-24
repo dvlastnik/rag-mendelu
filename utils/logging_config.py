@@ -1,10 +1,13 @@
 import logging
+import os
 from colorlog import ColoredFormatter
 
-def setup_logging(level=logging.INFO):
+def setup_logging(log_level=logging.INFO):
+
     logging.basicConfig(
-        level=level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        force=True
     )
 
 def get_logger(name: str) -> logging.Logger:
