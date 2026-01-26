@@ -3,10 +3,9 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.types import Send
 from langgraph.graph import END
-from logging import Logger
 
 from rag.agents.state import AgentState, WorkerState
-from rag.agents.models import MultiExtraction, GradeDocuments, GradeHallucinations
+from rag.agents.models import MultiExtraction, GradeDocumentsBatch, GradeHallucinations
 from rag.agents.enums import NodeName
 from database.base.BaseDbRepository import BaseDbRepository
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
@@ -23,27 +22,17 @@ class RagNodes:
     def query_rewriter_agent(self, state: AgentState):
         logger.info("--- QUERY REWRITING ---")
         original_query = state['messages'][-1].content
-        system_prompt = """You are a Query Reformulator. 
-                        Your task is to rewrite the user's latest message into a standalone, clear search query based on the conversation history.
+        system_prompt = """You are a Search Query Optimizer. 
+        Your task is to refine the user's query to be better suited for a vector database search.
 
-                        RULES:
-                        1. DO NOT answer the question.
-                        2. DO NOT add facts or hallucinations.
-                        3. ONLY return the rewritten query text.
+        CRITICAL RULES:
+        1. **PRESERVE INTENT**: NEVER change the meaning of the question (e.g., do NOT change "warmest" to "coolest", "highest" to "lowest").
+        2. **PRESERVE ENTITIES**: Keep specific years (2023), organizations (WMO), and proper nouns exactly as they are.
+        3. **CLARIFY**: Remove conversational filler ("Can you tell me...", "I was wondering").
+        4. **Target**: Focus on finding factual statements in a scientific report.
 
-                        EXAMPLES:
-                        History: [User: "Tell me about droughts in France."]
-                        Input: "And in Spain?"
-                        Output: "Tell me about droughts in Spain."
-
-                        History: [User: "What was the GDP of Germany in 2020?"]
-                        Input: "Compare it with Italy."
-                        Output: "Compare the GDP of Germany and Italy in 2020."
-
-                        History: []
-                        Input: "Floods in Prague 2002"
-                        Output: "Floods in Prague 2002"
-                        """
+        If the original query is already specific and clear, output it exactly as is.
+        """
 
         history_text = "\n".join([f"{m.type}: {m.content}" for m in state['messages'][:-1]])
         user_input = f"History:\n{history_text}\nInput: \"{original_query}\"\nOutput:"
@@ -148,40 +137,57 @@ class RagNodes:
     def retrieval_grader_agent(self, state: AgentState):
         logger.info("--- GRADING RETRIEVED DOCS ---")
         question = state.get('rewritten_query')
-        documents = state.get('search_results')
-        if len(documents) == 0:
+        raw_documents = state.get('search_results')
+        if len(raw_documents) == 0:
             return {'filtered_results': []}
 
-        filtered_docs = []
+        unique_docs = []
+        seen_hashes = set()
+        for doc in raw_documents:
+            doc_hash = hash(doc.strip()) 
+            if doc_hash not in seen_hashes:
+                seen_hashes.add(doc_hash)
+                unique_docs.append(doc)
 
-        grader_llm = self.llm.with_structured_output(GradeDocuments)
-        system_prompt = """You are a grader assessing relevance of a retrieved document to a user question.
+        doc_texts = []
+        for index, doc in enumerate(unique_docs):
+            doc_texts.append(f"[{index}] --- DOCUMENT START ---\n{doc}\n--- DOCUMENT END ---")
+        context_block = "\n\n".join(doc_texts)
 
-        CRITICAL INSTRUCTION:
-        The user might ask a "Comparison" question (e.g., "Compare X and Y").
-        - If a document contains information about **X**, it is **RELEVANT**.
-        - If a document contains information about **Y**, it is **RELEVANT**.
-        - The document does **NOT** need to contain both.
-        - The document does **NOT** need to perform the comparison itself.
+        grader_llm = self.llm.with_structured_output(GradeDocumentsBatch)
+        system_prompt = """You are a precise grader. You will be given a list of retrieved documents, each labeled with an ID (e.g., [0], [1]).
+        
+        Your task is to identify which documents are RELEVANT to the user's question.
+        
+        CRITICAL RULES:
+        1. Return ONLY the list of integer IDs (e.g., [0, 2]) for documents that contain relevant facts.
+        2. If a document helps answer *any part* of the comparison (e.g. only about Greenland), it is RELEVANT.
+        3. Be lenient. If in doubt, include it.
+        """
 
-        If the document provides *any* facts that contribute to answering *part* of the question, grade it as 'yes'."""
-
-        for doc in documents:
-            grade = grader_llm.invoke([
+        try:
+            grade_result = grader_llm.invoke([
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=f'Retrieved document: \n\n {doc} \n\n User Question: {question}')
+                HumanMessage(content=f"User Question: {question}\n\nCandidate Documents:\n{context_block}")
             ])
             
-            score = cast(GradeDocuments, grade)
-            logger.info(doc)
-            if score.is_relevant.lower() == 'yes':
-                logger.info(f"Grade: DOCUMENT RELEVANT")
-                filtered_docs.append(doc)
-            else:
-                logger.info(f"Grade: DOCUMENT IRRELEVANT (Filtered Out)")
-            logger.info('------------------------------------------------')
-        
-        return {'filtered_results': filtered_docs}
+            result = cast(GradeDocumentsBatch, grade_result)
+            relevant_indices = result.relevant_indices
+            
+            filtered_docs = []
+            for i in relevant_indices:
+                if 0 <= i < len(unique_docs):
+                    filtered_docs.append(unique_docs[i])
+                    logger.info(f"Keeping Doc [{i}]")
+                else:
+                    logger.warning(f"LLM returned invalid index {i}")
+
+            logger.info(f"Kept {len(filtered_docs)}/{len(unique_docs)} documents.")
+            return {'filtered_results': filtered_docs}
+
+        except Exception as e:
+            logger.error(f"Grading failed: {e}. Fallback: Keeping all unique docs.")
+            return {'filtered_results': unique_docs}
     
     def synthesizer_agent(self, state: AgentState):
         logger.info("--- SYNTHESIZING FINAL ANSWER ---")
@@ -191,17 +197,19 @@ class RagNodes:
             return {'messages': [AIMessage(content='I could not find specific information in the database to answer your comparison.')]}
 
         context_block = "\n\n".join(results)
-        prompt = f"""You are a climate research analyst. 
-        The user asked: "{user_query}"
+        prompt = f"""You are senior synthetizer.
+        User Question: "{user_query}"
         
-        Below are the search results gathered from the database:
+        Context from Database:
         -----
         {context_block}
         -----
         
-        Synthesize these findings into a clear, direct answer. 
-        If the user asked for a comparison, explicitly contrast the data points (e.g., "While Italy had X, Czechia had Y").
-        Do not make up facts not present in the search results.
+        Instructions:
+        1. Answer the question using ONLY the context provided above.
+        2. If the user asked for a comparison, explicitly contrast the data points (e.g., "While Item A has X, Item B has Y").
+        3. START DIRECTLY. Do not say "Based on the search results" or "Here is the answer". Just state the facts.
+        4. If the context does not contain the answer, state that you do not know. Do not guess.
         """
 
         is_retry = state.get("hallucination_status") == "hallucinated"
@@ -256,7 +264,10 @@ class RagNodes:
     def validate_and_map(state: AgentState) -> Literal[NodeName.RESEARCH_WORKER, NodeName.ERROR]:
         data = state.get('extracted_data', [])
         query = state.get('rewritten_query')
-            
+        
+        if not data:
+            return NodeName.ERROR
+
         return [
             Send(NodeName.RESEARCH_WORKER, {'target': t, 'query': query}) 
             for t in data

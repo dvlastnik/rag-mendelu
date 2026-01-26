@@ -10,12 +10,6 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-def _format_docs(docs: List[Document]) -> str:
-    """
-    Combines the page content of retrieved documents into a single string.
-    """
-    return "\n\n".join(doc.page_content for doc in docs)
-
 class AgenticRAG:
     def __init__(
         self, 
@@ -38,13 +32,18 @@ class AgenticRAG:
             'rewritten_query': '',
             'search_results': [],
             'extracted_data': [],
+            'filtered_results': [],
             'hallucination_status': None
         }
         
         try:
             final_state = self.agents.invoke(initial_state, config={"recursion_limit": 50})
             last_message = final_state['messages'][-1]
-            return last_message.content
+
+            return {
+                'response': last_message.content,
+                'sources': final_state['filtered_results']
+            }
             
         except Exception as e:
             logger.error(f"Agent Workflow Failed: {e}")

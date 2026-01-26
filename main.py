@@ -1,34 +1,41 @@
 import argparse
 import os
 import time
+import logging
 from dotenv import load_dotenv
-from typing import Dict
 import datetime
+from pathlib import Path
 
 from database.QdrantDbRepository import QdrantDbRepository
 from database.base.BaseDbRepository import BaseDbRepository
 from etl.DroughEtl import DroughEtl
 from llm_handler.LLMHandler import LLMHandler
 from metadata_extractor.LLMMetadataExtractor import LLMMetadataExtractor
-from metadata_extractor.models import DroughMetadata
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
-from etl.Mzdr1DataEtl import Mzdr1DataEtl
 from rag.AgenticRAG import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
 from utils.Utils import Utils
 import constants
-from database.base.MyDocument import MyDocument
+
+load_dotenv()
 
 setup_logging()
 logger = get_logger(__name__)
 
-load_dotenv()
-
-def run_etl_drough(folder_path: str, delete_collection: bool, embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, llm_handler: LLMHandler):
+def run_etl_drough(path: str, delete_collection: bool, embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, llm_handler: LLMHandler):
     """Runs the Drough (PDF) ETL pipeline on all files."""
     highlight_log(logger, "Starting Drough ETL pipeline...")
-    if folder_path != '':
-        pdf_files = Utils.find_files(folder_path=folder_path, file_type='pdf')
+    if path != '':
+        path_obj = Path(path)
+        if path_obj.exists():
+            if path_obj.is_dir():
+                print('is a dir')
+                pdf_files = Utils.find_files(folder_path=path, file_type='pdf')
+            else:
+                print('is a file')
+                pdf_files = [path]
+        else:
+            raise FileNotFoundError(f'Folders or file at location {path_obj} not found')
     else:
         # TODO: Remove, this is only mocked this else branch should raise exception
         pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
@@ -69,6 +76,8 @@ def check_databases(db_repository: BaseDbRepository):
 
     db_repository.connect()
     db_repository.logger.info(f'Rows in drough: {db_repository.get_count()}')
+    filenames = db_repository.get_all_filenames()
+    db_repository.logger.info(f'Ingested files in db: {filenames} (size: {len(filenames)})')
     db_repository.close()
     
 
@@ -85,14 +94,21 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
 
     rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service)
 
-    question = "The report explicitly states that the Greenland Ice Sheet lost approximately 85 Gt of ice in 2022. What was the specific total mass balance loss (in Gigatonnes) for the Antarctic Ice Sheet reported for the same period?"
-    result = rag.chat(question)
-    print()
-    # print(f"Question: {question}")
-    print(f"Assistant: {result}")
-    # for index, source in enumerate(result['sources']):
-    #     print(f" Source {index}:")
-    #     print(f"   Metadata: {source.metadata}")
+    # question = "The report explicitly states that the Greenland Ice Sheet lost approximately 85 Gt of ice in 2022. What was the specific total mass balance loss (in Gigatonnes) for the Antarctic Ice Sheet reported for the same period?"
+    print("Assitant ready. Type 'exit' to end program.")
+    while True:
+        question = input('Enter question: ')
+        if 'exit' in question.lower():
+            break
+
+        result = rag.chat(question)
+        print(f'Assistant: {result['response']}')
+        print('//////////////////////////////////')
+        for index, source in enumerate(result['sources']):
+            print(f'--- Source {index}: ---')
+            print(f' Source Text: {source}')
+            print(f'-----------------------')
+        print('//////////////////////////////////')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='RAG app')
@@ -154,12 +170,9 @@ def main():
         }
     )
     llm_handler = LLMHandler(ip='localhost', port=11434)
-    delete_collection = args.erase_db
-    if delete_collection is None:
-        delete_collection = False
-        
+
     if args.run_etl:
-        run_etl_drough(args.path, delete_collection, embedding_service, db_repository, llm_handler)
+        run_etl_drough(args.path, args.erase_db, embedding_service, db_repository, llm_handler)
         
     elif args.check_dbs:
         check_databases(db_repository)
@@ -176,7 +189,7 @@ def main():
     elapsed = end_time - start_time
     delta = datetime.timedelta(seconds=elapsed)
     highlight_log(logger, str(delta), character='~')
-
+    
 if __name__ == '__main__':
     main()
     

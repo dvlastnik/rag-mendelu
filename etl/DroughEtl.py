@@ -5,7 +5,7 @@ from collections import Counter
 import pathlib
 import re
 from langchain_core.documents import Document
-from langchain_text_splitters import MarkdownHeaderTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 from etl.BaseEtl import BaseEtl, ETLState
 from database.base.MyDocument import MyDocument, SparseVector
@@ -15,6 +15,8 @@ from metadata_extractor.models import DroughMetadata
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+MAX_SAFE_CHUNK_SIZE = 2000
 
 class DroughEtl(BaseEtl):
     def __init__(self, filepath, db_repositories, embedding_service, metadata_extractor: LLMMetadataExtractor):
@@ -260,8 +262,31 @@ class DroughEtl(BaseEtl):
             return []
 
         processed_chunks = []
-        logger.debug(f" Sending {len(text)} chars to ChunkAndEmbed API")
-        chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=text)
+        chunk_and_embed_result: List[ChunkAndEmbedResponse] = []
+        if len(text) > MAX_SAFE_CHUNK_SIZE:
+            logger.warning(f"Text too large ({len(text)} chars). Pre-splitting locally to prevent OOM.")
+            pre_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=MAX_SAFE_CHUNK_SIZE,
+                chunk_overlap=200,
+                separators=["\n\n", "\n", " ", ""]
+            )
+            smaller_chunks = pre_splitter.split_text(text)
+            length = len(smaller_chunks)
+            logger.info(f' - Smaller chunks len: {length}')
+
+            for i, chunk in enumerate(smaller_chunks):
+                try:
+                    logger.info(f' - [{i+1}/{length}] ...')
+                    response = self.embedding_service.chunk_and_embed(data=chunk)
+                    if response:
+                        chunk_and_embed_result.extend(response)
+                        logger.info(f' - [{i+1}/{length}] Done')
+                    else:
+                        logger.info(f' - [{i+1}/{length}] Response was none: {response}')
+                except Exception as e:
+                    logger.error(f"Failed to embed sub-chunk {i}: {e}")
+        else:
+            chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=text)
         
         for chunk in chunk_and_embed_result:
             chunk.text = chunk.text.lstrip(',')

@@ -24,7 +24,13 @@ class MultiExtraction(BaseModel):
 class GradeDocuments(BaseModel):
     is_relevant: str = Field(
         ...,
-        description="Documents are relevant to the user query, 'yes' or 'no'"
+        description="Documents are relevant to the user query, 'yes' or 'no'."
+    )
+
+class GradeDocumentsBatch(BaseModel):
+    relevant_indices: List[int] = Field(
+        ...,
+        description="List of integer indices (0, 1, 2) of the documents that are relevant."
     )
 
 class GradeHallucinations(BaseModel):

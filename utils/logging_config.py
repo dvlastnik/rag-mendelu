@@ -2,16 +2,11 @@ import logging
 import os
 from colorlog import ColoredFormatter
 
-def setup_logging(log_level=logging.INFO):
+def setup_logging(log_level=None):
+    if log_level is None:
+        env_level = os.getenv("LOG_LEVEL", "INFO").upper()
+        log_level = getattr(logging, env_level, logging.INFO)
 
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        force=True
-    )
-
-def get_logger(name: str) -> logging.Logger:
-    name = name.upper()
     formatter = ColoredFormatter(
         "%(log_color)s%(asctime)s - %(levelname)s - [%(name)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -27,14 +22,19 @@ def get_logger(name: str) -> logging.Logger:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
 
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
-    logger.addHandler(handler)
-    logger.propagate = False
+    logging.basicConfig(
+        level=log_level,
+        handlers=[handler],
+        force=True
+    )
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("qdrant_client").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
-    return logger
+def get_logger(name: str) -> logging.Logger:
+    return logging.getLogger(name.upper())
 
 def highlight_log(logger: logging.Logger, text: str, character: str = '/', length: int = 5, only_char: bool = False) -> None:
     side_string = length*character

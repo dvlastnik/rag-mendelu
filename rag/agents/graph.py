@@ -12,7 +12,7 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbeddingService, model_name: str = 'llama3.1:8b'):
+def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbeddingService, model_name: str = 'ibm/granite4:1b'):
     llm = init_chat_model(
         model=model_name,
         model_provider='ollama',
@@ -67,8 +67,4 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
 
     builder.add_edge(NodeName.SYNTHESIZER, END)
     
-
-    graph = builder.compile()
-
-    print(graph.get_graph().draw_mermaid())
-    return graph
+    return builder.compile()

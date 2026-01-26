@@ -219,6 +219,33 @@ class QdrantDbRepository(BaseDbRepository):
         except Exception as e:
             self.logger.error(f"Failed to get count: {e}")
             return 0
+        
+    def get_all_filenames(self) -> List[str]:
+        """
+        Gets all source files that are ingested in current database.
+        """
+        unique_filenames = set()
+        next_offset = None
+        
+        while True:
+            records, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                with_payload=['source'],
+                with_vectors=False,
+                limit=100,
+                offset=next_offset
+            )
+            
+            for record in records:
+                if record.payload:
+                    source = record.payload.get('source')
+                    if source:
+                        unique_filenames.add(source)
+            
+            if next_offset is None:
+                break
+                
+        return sorted(list(unique_filenames))
 
     def check_if_data_were_inserted(self) -> DbOperationResult:
         """Checks if the count is greater than 0."""
