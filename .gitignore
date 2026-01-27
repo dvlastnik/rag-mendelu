@@ -178,3 +178,6 @@ cython_debug/
 
 # data
 data/ignore_*
+
+# test results
+tests/rag/results/*

@@ -1,179 +1,209 @@
 [
     {
+        "id": 1,
         "question": "What was the global mean temperature anomaly in 2022 above the 1850-1900 average?",
         "response": "In 2022, the global mean temperature was 1.15 [1.02-1.28] °C above the 1850-1900 average.",
         "source": "Statement_2022.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 2,
         "question": "Which year was confirmed to be the warmest on record according to the WMO State of the Global Climate 2023 report?",
         "response": "The year 2023 was the warmest year on record at 1.45 ± 0.12 °C above the pre-industrial average.",
         "source": "1347_Global-statement-2023_en.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 3,
         "question": "What was the global mean near-surface temperature anomaly in 2024?",
         "response": "The annually averaged global mean near-surface temperature in 2024 was 1.55 °C ± 0.13 °C above the 1850-1900 average.",
         "source": "WMO-1368-2025_en.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 4,
         "question": "Compare the global mean temperature anomalies reported for the years 2022, 2023, and 2024.",
         "response": "In 2022, the global mean temperature was 1.15 °C above the 1850-1900 average. This increased to 1.45 °C above the average in 2023, and further increased to 1.55 °C above the average in 2024, setting a new record each time.",
         "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
         "difficulty": "hard"
     },
     {
+        "id": 5,
         "question": "What were the concentrations of Carbon Dioxide (CO2), Methane (CH4), and Nitrous Oxide (N2O) in 2022?",
         "response": "In 2022, global atmospheric concentrations reached 417.9 ± 0.2 ppm for CO2, 1923 ± 2 ppb for CH4, and 335.8 ± 0.1 ppb for N2O.",
         "source": "1347_Global-statement-2023_en.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 6,
         "question": "How did the atmospheric concentration of CO2 change from 2022 to 2023?",
         "response": "The atmospheric concentration of CO2 reached 420.0 ± 0.1 ppm in 2023, which was an increase of 2.3 ppm from 2022 levels (417.9 ppm).",
         "source": "WMO-1368-2025_en.pdf, 1347_Global-statement-2023_en.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 7,
         "question": "Describe the state of Antarctic sea-ice extent in 2023 compared to the long-term average.",
         "response": "In 2023, Antarctic sea-ice extent reached an absolute record low for the satellite era in February. The annual maximum extent in September was about 1 million km² below the previous record low maximum and roughly 1.5 million km² below the 1991-2020 average.",
         "source": "1347_Global-statement-2023_en.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 8,
         "question": "How did the Antarctic sea-ice extent minima compare between 2022, 2023, and 2024?",
         "response": "In 2022, Antarctic sea-ice dropped to 1.92 million km². In 2023, it reached an all-time minimum of 1.79 million km². In 2024, the minimum was 1.99 million km², which tied for the second lowest minimum in the satellite era.",
         "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
         "difficulty": "hard"
     },
     {
+        "id": 9,
         "question": "What significant flood event occurred in Europe in September 2024, and which countries were affected?",
         "response": "In September 2024, Storm Boris caused widespread flooding in central and eastern Europe, affecting eight countries including Poland, Germany, Austria, Czechia, Slovakia, Romania, Hungary, and Italy.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 10,
         "question": "What weather phenomenon caused the severe flooding in Valencia, Spain, in October 2024?",
         "response": "The flooding in Valencia was caused by a cut-off low-pressure system, known in Spanish as a 'DANA' (depresión aislada en niveles altos), which brought intense, record-breaking rainfall to the region.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 11,
         "question": "Analyze the east-west climate contrast observed in Europe during 2024 regarding precipitation and river flows.",
         "response": "In 2024, Europe experienced a distinct east-west contrast. Western Europe saw widespread wetter-than-average conditions and higher-than-average river flows, with some areas having their wettest year since 1979. In contrast, eastern and southeastern Europe experienced drier-than-average conditions and lower-than-average river flows, with some areas facing severe drought.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "hard"
     },
     {
+        "id": 12,
         "question": "What was the rate of global mean sea level rise in the decade 2014-2023 compared to the first decade of the satellite record?",
         "response": "The rate of global mean sea-level rise more than doubled from 2.13 mm/year in the first decade of the satellite record (1993-2002) to 4.77 mm/year in the decade 2014-2023.",
         "source": "1347_Global-statement-2023_en.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 13,
         "question": "Did the rate of sea level rise increase or decrease in the period 2015-2024 compared to 2014-2023?",
         "response": "The rate remained similar but slightly lower in the 2015-2024 period (4.7 mm/year) compared to the 2014-2023 period (4.77 mm/year), although both rates are more than double the rate of the first satellite decade.",
         "source": "WMO-1368-2025_en.pdf, 1347_Global-statement-2023_en.pdf",
         "difficulty": "hard"
     },
     {
+        "id": 14,
         "question": "What were the impacts of Typhoon Yagi in Asia in 2024?",
         "response": "Typhoon Yagi was the most significant event in Asia in 2024, causing catastrophic destruction and more than 700 deaths across Myanmar, Vietnam, Lao PDR, China, Thailand, and the Philippines. It made record-breaking landfalls in China and Vietnam.",
         "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 15,
         "question": "Identify the tropical cyclone that made the strongest landfall in Vietnam in 30 years during 2024.",
         "response": "Typhoon Yagi was the strongest system to make landfall in Vietnam in the last 30 years, hitting near Haiphong on 7 September 2024.",
         "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 16,
         "question": "Compare the flooding events in the Sahel region vs East Africa in 2024.",
         "response": "The Sahel region experienced an exceptionally wet monsoon with rainfall more than 50% above average, leading to long-lived flooding in the second half of 2024 affecting countries like Chad and Nigeria. East Africa saw significant flooding earlier in the year (March-May), particularly in Kenya and Tanzania, where seasonal rainfall was near double the average.",
         "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
         "difficulty": "complex"
     },
     {
+        "id": 17,
         "question": "What was the status of global ocean heat content in 2024?",
         "response": "In 2024, ocean heat content reached the highest level in the 65-year observational record, exceeding the previous record set in 2023 by 16 ± 8 ZJ.",
         "source": "WMO-1368-2025_en.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 18,
         "question": "Trace the trend of Ocean Heat Content (OHC) records from 2022 to 2024.",
         "response": "Ocean Heat Content reached a new record high in 2022. This record was broken again in 2023, and broken once more in 2024, marking eight consecutive years of new records.",
         "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
         "difficulty": "hard"
     },
     {
+        "id": 19,
         "question": "What characterized the 2024 wildfire season in Europe regarding emissions?",
         "response": "Wildfire emissions in Europe were below average for most of 2024, except for September, when large-scale fires in Portugal caused a significant increase in emissions.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 20,
         "question": "How did the 2024 European fire season compare to the record year of 2017 in terms of burnt area?",
         "response": "The estimated burnt area in Europe for 2024 was around 400,000 ha, which is slightly above average but 66% less than the record of 1,200,000 ha observed in 2017.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 21,
         "question": "What record regarding renewable energy was set in Europe in 2024?",
         "response": "In 2024, Europe saw a record proportion of electricity generation by renewables, reaching 45%.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 22,
         "question": "Discuss the impact of the El Niño-Southern Oscillation (ENSO) on the 2024 global climate indicators.",
         "response": "The strong El Niño that peaked in early 2024 boosted global mean temperatures. It also contributed to a higher growth rate of atmospheric CO2 due to increased fire emissions and reduced terrestrial carbon sinks, and influenced the rapid sea-level rise observed in 2023/2024.",
         "source": "WMO-1368-2025_en.pdf",
         "difficulty": "complex"
     },
     {
+        "id": 23,
         "question": "What was the mass balance loss for reference glaciers in the hydrological year 2022-2023?",
         "response": "In the hydrological year 2022-2023, global reference glaciers experienced the largest loss of ice on record (1950-2023), with preliminary data indicating extreme negative mass balances in western North America and Europe.",
         "source": "1347_Global-statement-2023_en.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 24,
         "question": "How did glacier mass loss in Scandinavia and Svalbard in 2024 compare to global records?",
         "response": "In 2024, glaciers in Scandinavia and Svalbard recorded their highest annual rates of mass loss on record. They also experienced the largest mass loss of any glacier region globally for that year.",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 25,
         "question": "Compare the severity of the heatwave in Southeastern Europe in July 2024 with the previous record from 2007.",
         "response": "The heatwave in July 2024 was the longest on record for Southeastern Europe, lasting 13 days with an anomaly of 9.2°C and affecting 55% of the region. The previous record in July 2007 was shorter (10 days) but slightly more intense (9.7°C anomaly) and affected a larger area (72%).",
         "source": "ESOTC-2024-report.pdf",
         "difficulty": "complex"
     },
     {
+        "id": 26,
         "question": "What was the status of ocean acidification in 2023?",
         "response": "In 2023, the global ocean surface pH continued to decline at a rate of -0.017 ± 0.001 pH units per decade (1985-2023), confirming ongoing ocean acidification.",
         "source": "WMO-1368-2025_en.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 27,
         "question": "Identify the regions where ocean acidification is occurring faster than the global average according to the 2024 report.",
         "response": "The most intense decreases in pH are observed in the Indian Ocean, the Southern Ocean, the eastern equatorial Pacific Ocean, the northern tropical Pacific, and some regions in the Atlantic Ocean.",
         "source": "WMO-1368-2025_en.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 28,
         "question": "What was the extent of the Arctic sea-ice minimum in 2024?",
         "response": "The minimum daily extent of Arctic sea-ice in 2024 was 4.28 million km² on 11 September.",
         "source": "WMO-1368-2025_en.pdf",
         "difficulty": "easy"
     },
     {
+        "id": 29,
         "question": "How did the 2024 Arctic sea-ice minimum compare to the 2023 minimum?",
         "response": "The 2024 minimum was 4.28 million km² (7th lowest), while the 2023 minimum was 4.23 million km² (6th lowest). Both years continued the trend of reduced ice cover.",
         "source": "WMO-1368-2025_en.pdf, 1347_Global-statement-2023_en.pdf",
         "difficulty": "medium"
     },
     {
+        "id": 30,
         "question": "Synthesize the trend of tropical nights in Europe as reported in the ESOTC 2024 report.",
         "response": "The number of tropical nights in Europe (where the minimum temperature remains above 20°C) has been increasing since the 1980s. In 2024, Europe experienced the second highest number of tropical nights on record, with Southeastern Europe specifically recording a record 23 tropical nights compared to an average of eight.",
         "source": "ESOTC-2024-report.pdf",

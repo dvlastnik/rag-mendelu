@@ -3,6 +3,7 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.types import Send
 from langgraph.graph import END
+import difflib
 
 from rag.agents.state import AgentState, WorkerState
 from rag.agents.models import MultiExtraction, GradeDocumentsBatch, GradeHallucinations
@@ -22,16 +23,23 @@ class RagNodes:
     def query_rewriter_agent(self, state: AgentState):
         logger.info("--- QUERY REWRITING ---")
         original_query = state['messages'][-1].content
-        system_prompt = """You are a Search Query Optimizer. 
-        Your task is to refine the user's query to be better suited for a vector database search.
+        system_prompt = """You are a Query Refinement Engine for a vector database. Your objective is to optimize user inputs for semantic similarity search.
 
-        CRITICAL RULES:
-        1. **PRESERVE INTENT**: NEVER change the meaning of the question (e.g., do NOT change "warmest" to "coolest", "highest" to "lowest").
-        2. **PRESERVE ENTITIES**: Keep specific years (2023), organizations (WMO), and proper nouns exactly as they are.
-        3. **CLARIFY**: Remove conversational filler ("Can you tell me...", "I was wondering").
-        4. **Target**: Focus on finding factual statements in a scientific report.
+        **Instructions:**
+        1.  **Analyze:** Identify the core intent, key entities, and important technical terms in the user's input.
+        2.  **Expand:** Include relevant synonyms, domain-specific terminology, and related concepts that increase the likelihood of a vector match.
+        3.  **Clean:** Remove conversational filler (e.g., "I want to find", "Please show me", "Hello"), stop words, and ambiguity.
+        4.  **Output:** Return **ONLY** the rewritten query string. Do not include explanations, labels, or conversational text.
 
-        If the original query is already specific and clear, output it exactly as is.
+        **Examples:**
+        Input: "best way to cook a steak"
+        Output: "steak cooking methods recipe grilling pan-searing medium-rare preparation guide culinary tips"
+
+        Input: "reviews for the new electric bmw"
+        Output: "BMW electric vehicle EV reviews i4 iX performance range battery life user ratings automotive specs"
+
+        Input: "where should I go for vacation in italy"
+        Output: "Italy travel recommendations tourism destinations Rome Venice Florence Amalfi Coast landmarks sightseeing"
         """
 
         history_text = "\n".join([f"{m.type}: {m.content}" for m in state['messages'][:-1]])
@@ -55,19 +63,17 @@ class RagNodes:
         
         logger.info(f"extracting in: {query}")
         extractor = self.llm.with_structured_output(MultiExtraction)
-        system_prompt = """You are an expert metadata extractor for climate research. 
-        Extract mentioned city, country, year, and crucial topics.
+        system_prompt = """You are a Metadata Extraction Specialist. Your task is to extract structured entities from a search query and output them in a specific JSON format.
 
-        CRITICAL GEOGRAPHICAL RULES:
-        1. If a natural region or landmark is mentioned, infer the COUNTRY.
-           Examples:
-           - Input: "Swiss Alps" -> Output Country: "Switzerland"
-           - Input: "Greenland Ice Sheet" -> Output Country: "Greenland"
-           - Input: "Amazon Rainforest" -> Output Country: "Brazil"
-           - Input: "Horn of Africa" -> Output Country: "East Africa" (or specific countries if named)
-           - Input: "Yangtze River" -> Output Country: "China"
-        
-        2. If the user mentions a demonym (e.g., "French droughts"), extract the Country ("France").
+        **Target JSON Structure:**
+        ```json
+        {
+        "country": "string or null",
+        "city": "string or null",
+        "year": "string or null (4-digit year)",
+        "topics": ["list", "of", "keywords"],
+        }
+        ```
         """
         result = extractor.invoke([
             SystemMessage(content=system_prompt),
@@ -75,9 +81,6 @@ class RagNodes:
         ])
         
         extracted_data = cast(MultiExtraction, result).targets
-        valid_data = [t for t in extracted_data if t.country or t.year or t.topics or t.city]
-        if not valid_data:
-             return {'extracted_data': []}
         
         return {"extracted_data": extracted_data}
 
@@ -116,7 +119,7 @@ class RagNodes:
             text_embedded=dense_vec,
             sparse_embedded=sparse_vec,
             filter_dict=search_filters,
-            n_results=5
+            n_results=10
         )
         if not db_result.success:
             return {'search_results': [f"Database Error: {db_result.message}"]}
@@ -125,10 +128,10 @@ class RagNodes:
             db_result = self.db_repository.search(
                 text_embedded=dense_vec,
                 sparse_embedded=sparse_vec,
-                n_results=5
+                n_results=20
             )
         
-        found_docs = [doc.text for doc in db_result.data]
+        found_docs = [doc for doc in db_result.data]
         if not found_docs:
             return {'search_results': [f"No detailed data found for {target}."]}
             
@@ -144,26 +147,38 @@ class RagNodes:
         unique_docs = []
         seen_hashes = set()
         for doc in raw_documents:
-            doc_hash = hash(doc.strip()) 
+            doc_hash = hash(doc.text.strip()) 
             if doc_hash not in seen_hashes:
                 seen_hashes.add(doc_hash)
                 unique_docs.append(doc)
 
         doc_texts = []
         for index, doc in enumerate(unique_docs):
-            doc_texts.append(f"[{index}] --- DOCUMENT START ---\n{doc}\n--- DOCUMENT END ---")
+            doc_texts.append(f"[{index}] --- DOCUMENT START ---\n{doc.text}\n--- DOCUMENT END ---")
         context_block = "\n\n".join(doc_texts)
 
         grader_llm = self.llm.with_structured_output(GradeDocumentsBatch)
-        system_prompt = """You are a precise grader. You will be given a list of retrieved documents, each labeled with an ID (e.g., [0], [1]).
-        
-        Your task is to identify which documents are RELEVANT to the user's question.
-        
-        CRITICAL RULES:
-        1. Return ONLY the list of integer IDs (e.g., [0, 2]) for documents that contain relevant facts.
-        2. If a document helps answer *any part* of the comparison (e.g. only about Greenland), it is RELEVANT.
-        3. Be lenient. If in doubt, include it.
-        """
+        system_prompt = """You are a Document Grader. Filter retrieved documents by relevance to the User Query.
+
+        **Rules:**
+        1. **Relevance:** Include the document ID if it contains *any* information (direct answer, context, or partial match) related to the query.
+        2. **Leniency:** If in doubt, include it.
+        3. **Output:** Return **ONLY** a valid JSON list of integer IDs (e.g., `[1, 4]`). No other text.
+
+        **Examples:**
+        Query: "Climate change effects on polar bears"
+        Docs:
+        [0] "Polar bear population is declining."
+        [1] "Penguins live in the south."
+        [2] "Arctic ice is melting."
+        Output: [0, 2]
+
+        Query: "Apple vs Microsoft history"
+        Docs:
+        [0] "Microsoft founded in 1975."
+        [1] "Bananas are yellow."
+        [2] "Apple released the Mac in 1984."
+        Output: [0, 2]"""
 
         try:
             grade_result = grader_llm.invoke([
@@ -196,7 +211,11 @@ class RagNodes:
         if len(results) == 0:
             return {'messages': [AIMessage(content='I could not find specific information in the database to answer your comparison.')]}
 
-        context_block = "\n\n".join(results)
+        doc_texts = []
+        for doc in results:
+            doc_texts.append(f"{doc.text}\nSource file: {doc.metadata['source']}")
+
+        context_block = "\n\n".join(doc_texts)
         prompt = f"""You are senior synthetizer.
         User Question: "{user_query}"
         
@@ -228,7 +247,12 @@ class RagNodes:
         current_retries = state.get('hallucination_retries', 0)
         documents = state.get('filtered_results', [])
         generated_answer = state['messages'][-1].content
-        context = '\n'.join(documents)
+
+        doc_texts = []
+        for doc in documents:
+            doc_texts.append(f"{doc.text}\nSource file: {doc.metadata['source']}")
+        context = '\n'.join(doc_texts)
+
 
         hallucination_grader_llm = self.llm.with_structured_output(GradeHallucinations)
         system_prompt = """You are a grader assessing whether an LLM generation is grounded in / supported by a set of retrieved facts.
@@ -257,7 +281,7 @@ class RagNodes:
 
     def error_agent(self, state: AgentState):
         logger.info("--- ERROR ---")
-        return {'messages': [AIMessage(content='I could not process your request. Please mention at least a specific YEAR, CITY or COUNTRY')]}
+        return {'messages': [AIMessage(content='I could not process your request. Please try to be more specific with your question.')]}
 
 
     @staticmethod

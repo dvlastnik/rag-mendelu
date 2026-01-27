@@ -106,7 +106,8 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
         print('//////////////////////////////////')
         for index, source in enumerate(result['sources']):
             print(f'--- Source {index}: ---')
-            print(f' Source Text: {source}')
+            print(f'Source from file: {source.metadata['source']}')
+            print(f' Source Text: {source.text}')
             print(f'-----------------------')
         print('//////////////////////////////////')
 

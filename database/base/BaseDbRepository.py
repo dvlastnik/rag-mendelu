@@ -43,6 +43,10 @@ class BaseDbRepository(ABC):
         pass
 
     @abstractmethod
+    def get_all_filenames(self) -> List[str]:
+        pass
+
+    @abstractmethod
     def check_if_data_were_inserted(self) -> DbOperationResult:
         pass
 
