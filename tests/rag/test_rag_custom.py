@@ -1,25 +1,43 @@
 import pytest
 import json
 import os
-from datetime import datetime
+
+from generate_answers import get_results_filepath
 from tests.rag.judge import Judge
 
-judge = Judge()
 session_results = []
 
-def load_test_data():
-    path = 'tests/rag/results/answers_260127_2027/answers.json'
-    if not os.path.exists(path):
-        pytest.fail(f"Data file not found: {path}")
-    with open(path, "r") as f:
-        # For now only 5 to test this out
-        return json.load(f)
+def pytest_generate_tests(metafunc):
+    """
+    This special Pytest hook runs at 'Collection Time'.
+    It allows us to read CLI args (--model) and generate tests dynamically.
+    """
+    if "data" in metafunc.fixturenames:
+        model_name = metafunc.config.getoption("--model")
+        base_path = get_results_filepath(model_name) 
+        file_path = os.path.join(base_path, "answers.json")
+        if os.path.exists(file_path):
+            with open(file_path, "r") as f:
+                dataset = json.load(f)['answers']
+        else:
+            print(f"⚠️ Warning: {file_path} not found during collection.")
+            dataset = []
 
-test_dataset = load_test_data()
+        metafunc.parametrize(
+            'data', 
+            dataset, 
+            ids=[f"ID_{item['id']}" for item in dataset]
+        )
 
-# --- FIXTURE: LOGGING ---
+@pytest.fixture(scope="session")
+def judge():
+    """
+    Initializes the Judge using the model name passed via CLI (--model).
+    """
+    return Judge()
+
 @pytest.fixture(scope="session", autouse=True)
-def evaluation_logger():
+def evaluation_logger(model_name):
     """
     This fixture runs once per session.
     It waits for all tests to finish, then saves 'session_results' to a file.
@@ -27,31 +45,38 @@ def evaluation_logger():
     yield
     
     if session_results:
-        output_dir = "tests/rag/results/answers_260127_2027"
+        output_dir = get_results_filepath(model_name)
         os.makedirs(output_dir, exist_ok=True)
         
-        filename = f"judgement_report.json"
-        output_path = os.path.join(output_dir, filename)
+        output_path = os.path.join(output_dir, 'judgement_report.json')
+        answers_path = os.path.join(output_dir, 'answers.json')
+
+        duration = 0
+        if os.path.exists(answers_path):
+            with open(answers_path, 'r') as f:
+                data = json.load(f)
+                duration = data.get('metadata', {}).get('duration_seconds', 0)
         
         total = len(session_results)
         passed = sum(1 for r in session_results if r['status'] == 'PASSED')
         accuracy = (passed / total) * 100 if total > 0 else 0
         
         final_report = {
-            "meta": {
-                "total_tests": total,
-                "passed": passed,
-                "failed": total - passed,
-                "accuracy_percent": round(accuracy, 2)
+            'metadata': {
+                'duration_seconds': round(duration, 2),
+                'duration_minutes': round(duration / 60, 2),
+                'total_tests': total,
+                'passed': passed,
+                'failed': total - passed,
+                'accuracy_percent': round(accuracy, 2)
             },
-            "details": session_results
+            'details': session_results
         }
         
         with open(output_path, "w") as f:
             json.dump(final_report, f, indent=2)
 
-@pytest.mark.parametrize("data", test_dataset, ids=[f"ID_{i['id']}" for i in test_dataset])
-def test_rag_quality(data):
+def test_rag_quality(data, judge):
     raw_sources = data.get("retrieved_sources", "")
     retrieval_context = [s.strip() for s in raw_sources.split("\n\n") if s.strip()]
     
@@ -63,17 +88,20 @@ def test_rag_quality(data):
     )
     
     log_entry = {
-        "id": data['id'],
-        "question": data['question'],
-        "answer": data['generated_answer'],
-        "true_answer": data['ground_truth'],
-        "scores": {
-            "relevancy": eval_result.relevancy_score,
-            "faithfulness": eval_result.faithfulness_score
+        'id': data['id'],
+        'question': data['question'],
+        'answer': data['generated_answer'],
+        'extracted_data': data['extracted_data'],
+        'rewritten_query': data['rewritten_query'],
+        'expanded_queries': data['expanded_queries'],
+        'true_answer': data['ground_truth'],
+        'scores': {
+            'relevancy': eval_result.relevancy_score,
+            'faithfulness': eval_result.faithfulness_score
         },
-        "pass_fail": eval_result.pass_fail,
-        "reasoning": eval_result.reasoning,
-        "status": "PASSED" if eval_result.pass_fail else "FAILED"
+        'pass_fail': eval_result.pass_fail,
+        'reasoning': eval_result.reasoning,
+        'status': "PASSED" if eval_result.pass_fail else "FAILED"
     }
     session_results.append(log_entry)
 

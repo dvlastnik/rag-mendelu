@@ -1,4 +1,5 @@
 import json
+import time
 import os
 import sys
 from tqdm import tqdm
@@ -14,20 +15,33 @@ from database.base.BaseDbRepository import BaseDbRepository
 from rag.AgenticRAG import AgenticRAG
 import constants
 
-def load_questions() -> List[Dict[str, any]]:
-    with open('tests/rag/questions.json', 'r') as f:
-        return json.load(f)
-    
-def save_answers(results: List[Dict[str, any]]):
-    current_timestamp = datetime.now().strftime("%y%m%d_%H%M")
+def get_results_filepath(model_name: str) -> str:
+    current_timestamp = datetime.now().strftime("%y%m%d")
+    return f'tests/rag/results/answers_{current_timestamp}_{model_name}'
 
-    folder_path = f'tests/rag/results/answers_{current_timestamp}'
+def load_questions(filepath: str) -> List[Dict[str, any]]:
+    with open(filepath, 'r') as f:
+        return json.load(f)
+
+def save_answers(results: List[Dict[str, any]], model_name: str, duration: float):
+    folder_path = get_results_filepath(model_name)
     output_path = f'{folder_path}/answers.json'
     os.makedirs(folder_path, exist_ok=True)
-    with open(output_path, 'w') as f:
-        json.dump(results, f, indent=2)
+
+    output_data = {
+        "metadata": {
+            "model": model_name,
+            "duration_seconds": round(duration, 2),
+            "duration_minutes": round(duration / 60, 2),
+            "total_questions": len(results)
+        },
+        "answers": results
+    }
     
-def generate_anwers(questions: List[Dict[str, any]]) -> List[Dict[str, any]]:
+    with open(output_path, 'w') as f:
+        json.dump(output_data, f, indent=2)
+    
+def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1:8b') -> List[Dict[str, any]]:
     embedding_service = TextEmbeddingService(ip="localhost", port=8000)
     db_repository = QdrantDbRepository(
         ip='localhost', 
@@ -43,7 +57,7 @@ def generate_anwers(questions: List[Dict[str, any]]) -> List[Dict[str, any]]:
         print(f"Failed to connect to ChromaDB for RAG: {connect_result.message}")
         return
 
-    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service)
+    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name)
 
     results = []
     for q in tqdm(questions, desc='Generating RAG Answers'):
@@ -52,6 +66,22 @@ def generate_anwers(questions: List[Dict[str, any]]) -> List[Dict[str, any]]:
         try:
             response = rag.chat(question)
             generated_text = response['response']
+            state = response['agent_state']
+            rewritten_query = state['rewritten_query']
+
+            expanded_queries = []
+            extracted_data = []
+            for e in state['extracted_data']:
+                extracted_data.append({
+                    'year': e.year,
+                    'country': e.country,
+                    'city': e.city,
+                    'topics': e.topics
+                })
+
+                topics_str = ', '.join(e.topics)
+                expanded_queries.append(f'{rewritten_query}\n{topics_str}')
+
             sources = response['sources']
             retrieved_docs = ''
             for source in sources:
@@ -61,19 +91,24 @@ def generate_anwers(questions: List[Dict[str, any]]) -> List[Dict[str, any]]:
             retrieved_docs = []
 
         results.append({
-            "id": q['id'],
-            "question": question,
-            "ground_truth": q['response'],
-            "generated_answer": generated_text,
-            "retrieved_sources": retrieved_docs
+            'id': q['id'],
+            'question': question,
+            'ground_truth': q['response'],
+            'generated_answer': generated_text,
+            'retrieved_sources': retrieved_docs,
+            'extracted_data': extracted_data,
+            'rewritten_query': rewritten_query,
+            'expanded_queries': expanded_queries
         })
 
     return results
 
-def main():
-    questions = load_questions()
-    results = generate_anwers(questions)
-    save_answers(results)
-    
-if __name__ == '__main__':
-    main()
+def generate_answers(model_name: str, questions_filepath: str):
+    questions = load_questions(questions_filepath)
+
+    start_time = time.time()
+    results = generate_anwers(questions, model_name)
+    end_time = time.time()
+    duration = end_time - start_time
+
+    save_answers(results, model_name, duration)

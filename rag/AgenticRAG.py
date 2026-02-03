@@ -1,4 +1,5 @@
-from typing import List, Dict, Any
+from typing import Dict, Any
+import traceback
 
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
@@ -41,10 +42,12 @@ class AgenticRAG:
             last_message = final_state['messages'][-1]
 
             return {
+                'agent_state': final_state,
                 'response': last_message.content,
                 'sources': final_state['filtered_results']
             }
             
         except Exception as e:
+            traceback.print_exc()
             logger.error(f"Agent Workflow Failed: {e}")
             return f"I encountered an error while processing your request: {str(e)}"

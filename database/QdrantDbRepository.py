@@ -220,6 +220,28 @@ class QdrantDbRepository(BaseDbRepository):
             self.logger.error(f"Failed to get count: {e}")
             return 0
         
+    def validate_filter(self, value, key_name: str):
+        result = None
+        
+        if isinstance(value, str):
+            value = value.lower()
+        
+        print(f'key_name: {key_name}, value: {value}')
+        if value:
+            count_result = self.client.count(
+                collection_name=self.collection_name,
+                count_filter=models.Filter(
+                    must=[models.FieldCondition(key=key_name, match=models.MatchValue(value=value))]
+                )
+            )
+            if count_result.count > 0:
+                result = value
+                self.logger.info(f"✅ Filter Validated: {key_name} '{value}' has {count_result.count} docs.")
+            else:
+                self.logger.warning(f"⚠️ Filter Dropped: {key_name} '{value}' has 0 docs.")
+        
+        return result
+        
     def get_all_filenames(self) -> List[str]:
         """
         Gets all source files that are ingested in current database.

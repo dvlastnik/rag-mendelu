@@ -10,6 +10,7 @@ dependencies = [
     "deepeval>=3.8.1",
     "docling>=2.67.0",
     "dotenv>=0.9.9",
+    "flashrank>=0.2.10",
     "langchain>=1.2.3",
     "langchain-community>=0.4.1",
     "langchain-core>=1.2.7",

@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass
 
 @dataclass
@@ -13,6 +13,18 @@ class MyDocument():
     embedding: List[float] = None
     sparse_embedding: SparseVector = None
     metadata: Dict = None
+    score: Optional[float] = None
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> 'MyDocument':
+        return MyDocument(
+            id=str(data.get("id")),
+            text=data.get("text", ""),
+            metadata=data.get("meta") or data.get("metadata") or {},
+            score=data.get("score"),
+            embedding=data.get("embedding"),
+            sparse_embedding=data.get("sparse_embedding")
+        )
 
     @staticmethod
     def from_chromadb_result(data: Dict) -> 'MyDocument' | List['MyDocument']:

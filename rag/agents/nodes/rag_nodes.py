@@ -1,13 +1,16 @@
-from typing import cast, Literal
+from typing import cast, Literal, Dict
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.types import Send
 from langgraph.graph import END
-import difflib
+from flashrank import Ranker, RerankRequest
+from qdrant_client import models
 
+from database.base.MyDocument import MyDocument
 from rag.agents.state import AgentState, WorkerState
-from rag.agents.models import MultiExtraction, GradeDocumentsBatch, GradeHallucinations
+from rag.agents.models import MultiExtraction, GradeDocumentsBatch, GradeHallucinations, ExtractionScheme
 from rag.agents.enums import NodeName
+from rag.agents.prompts import Prompts
 from database.base.BaseDbRepository import BaseDbRepository
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 from utils.logging_config import get_logger
@@ -19,34 +22,17 @@ class RagNodes:
         self.llm = llm
         self.db_repository = db_repository
         self.embedding_service = embedding_service
+        self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2')
         
     def query_rewriter_agent(self, state: AgentState):
         logger.info("--- QUERY REWRITING ---")
         original_query = state['messages'][-1].content
-        system_prompt = """You are a Query Refinement Engine for a vector database. Your objective is to optimize user inputs for semantic similarity search.
-
-        **Instructions:**
-        1.  **Analyze:** Identify the core intent, key entities, and important technical terms in the user's input.
-        2.  **Expand:** Include relevant synonyms, domain-specific terminology, and related concepts that increase the likelihood of a vector match.
-        3.  **Clean:** Remove conversational filler (e.g., "I want to find", "Please show me", "Hello"), stop words, and ambiguity.
-        4.  **Output:** Return **ONLY** the rewritten query string. Do not include explanations, labels, or conversational text.
-
-        **Examples:**
-        Input: "best way to cook a steak"
-        Output: "steak cooking methods recipe grilling pan-searing medium-rare preparation guide culinary tips"
-
-        Input: "reviews for the new electric bmw"
-        Output: "BMW electric vehicle EV reviews i4 iX performance range battery life user ratings automotive specs"
-
-        Input: "where should I go for vacation in italy"
-        Output: "Italy travel recommendations tourism destinations Rome Venice Florence Amalfi Coast landmarks sightseeing"
-        """
 
         history_text = "\n".join([f"{m.type}: {m.content}" for m in state['messages'][:-1]])
         user_input = f"History:\n{history_text}\nInput: \"{original_query}\"\nOutput:"
 
         response = self.llm.invoke([
-            SystemMessage(content=system_prompt),
+            SystemMessage(content=Prompts.get_query_rewriter_agent_prompt()),
             HumanMessage(content=user_input)
         ])
 
@@ -63,26 +49,69 @@ class RagNodes:
         
         logger.info(f"extracting in: {query}")
         extractor = self.llm.with_structured_output(MultiExtraction)
-        system_prompt = """You are a Metadata Extraction Specialist. Your task is to extract structured entities from a search query and output them in a specific JSON format.
 
-        **Target JSON Structure:**
-        ```json
-        {
-        "country": "string or null",
-        "city": "string or null",
-        "year": "string or null (4-digit year)",
-        "topics": ["list", "of", "keywords"],
-        }
-        ```
-        """
         result = extractor.invoke([
-            SystemMessage(content=system_prompt),
+            SystemMessage(content=Prompts.get_extractor_agent_prompt()),
             HumanMessage(content=query)
         ])
         
         extracted_data = cast(MultiExtraction, result).targets
         
         return {"extracted_data": extracted_data}
+    
+    def research_worker_v2(self, state: WorkerState):
+        target = state.get('target')
+        search_text = state.get('query')
+        logger.info(f"--- WORKER SEARCHING: {target} ---")
+
+        expanded_query = search_text
+        if target.topics:
+            topics_str = ', '.join(target.topics)
+            expanded_query = f'{expanded_query} | {topics_str}'
+        
+        logger.info(f'Expanded query: {expanded_query}')
+        try:
+            response_list = self.embedding_service.get_embedding_with_uuid(data=expanded_query)
+            if not response_list:
+                return {'search_results': [f"Error: Could not generate embeddings for query."]}
+                
+            query_data = response_list[0]
+            dense_vec = query_data.embedding
+            sparse_vec = query_data.sparse
+            
+        except Exception as e:
+            logger.info(f"Worker Embedding Error: {e}")
+            return {'search_results': []}
+        
+        strategies = self._get_strategies(target)
+        raw_docs = []
+        for strategy in strategies:
+            logger.info(f"Trying Strategy: {strategy['name']}")
+            db_result = self.db_repository.search(
+                text_embedded=dense_vec,
+                sparse_embedded=sparse_vec,
+                filter_dict=strategy["filter"],
+                n_results=50 
+            )
+
+            if db_result.success and len(db_result.data) > 0:
+                raw_docs = db_result.data
+                logger.info(f"✅ Found {len(raw_docs)} docs using {strategy['name']}")
+                break
+        
+        if not raw_docs:
+            return {'search_results': [f"No data found for {target}."]}
+        
+        logger.info('--- RERANKING CANDIDATES ---')
+        passages = [
+            {'id': doc.id, 'text': doc.text, 'meta': doc.metadata} 
+            for doc in raw_docs
+        ]
+        rerank_request = RerankRequest(query=expanded_query, passages=passages)
+        results = self.reranker.rerank(rerank_request)
+
+        final_docs = [MyDocument.from_dict(r) for r in results[:20]]
+        return {'search_results': final_docs}
 
     def research_worker(self, state: WorkerState):
         target = state.get('target')
@@ -92,10 +121,11 @@ class RagNodes:
         expanded_query = search_text
         if target.topics:
             topics_str = ', '.join(target.topics)
-            expanded_query = f'{expanded_query}\n\nImportant Keywords: {topics_str}'
+            expanded_query = f'{expanded_query}\n{topics_str}'
         
+        logger.info(f'Expanded query: {expanded_query}')
         try:
-            response_list = self.embedding_service.get_embedding_with_uuid(data=search_text)
+            response_list = self.embedding_service.get_embedding_with_uuid(data=expanded_query)
             if not response_list:
                 return {'search_results': [f"Error: Could not generate embeddings for query."]}
                 
@@ -128,7 +158,7 @@ class RagNodes:
             db_result = self.db_repository.search(
                 text_embedded=dense_vec,
                 sparse_embedded=sparse_vec,
-                n_results=20
+                n_results=10
             )
         
         found_docs = [doc for doc in db_result.data]
@@ -158,31 +188,10 @@ class RagNodes:
         context_block = "\n\n".join(doc_texts)
 
         grader_llm = self.llm.with_structured_output(GradeDocumentsBatch)
-        system_prompt = """You are a Document Grader. Filter retrieved documents by relevance to the User Query.
-
-        **Rules:**
-        1. **Relevance:** Include the document ID if it contains *any* information (direct answer, context, or partial match) related to the query.
-        2. **Leniency:** If in doubt, include it.
-        3. **Output:** Return **ONLY** a valid JSON list of integer IDs (e.g., `[1, 4]`). No other text.
-
-        **Examples:**
-        Query: "Climate change effects on polar bears"
-        Docs:
-        [0] "Polar bear population is declining."
-        [1] "Penguins live in the south."
-        [2] "Arctic ice is melting."
-        Output: [0, 2]
-
-        Query: "Apple vs Microsoft history"
-        Docs:
-        [0] "Microsoft founded in 1975."
-        [1] "Bananas are yellow."
-        [2] "Apple released the Mac in 1984."
-        Output: [0, 2]"""
 
         try:
             grade_result = grader_llm.invoke([
-                SystemMessage(content=system_prompt),
+                SystemMessage(content=Prompts.get_retrieval_grader_agent_prompt()),
                 HumanMessage(content=f"User Question: {question}\n\nCandidate Documents:\n{context_block}")
             ])
             
@@ -216,28 +225,20 @@ class RagNodes:
             doc_texts.append(f"{doc.text}\nSource file: {doc.metadata['source']}")
 
         context_block = "\n\n".join(doc_texts)
-        prompt = f"""You are senior synthetizer.
-        User Question: "{user_query}"
-        
+        human_prompt = f"""User Question: "{user_query}"
         Context from Database:
         -----
         {context_block}
         -----
-        
-        Instructions:
-        1. Answer the question using ONLY the context provided above.
-        2. If the user asked for a comparison, explicitly contrast the data points (e.g., "While Item A has X, Item B has Y").
-        3. START DIRECTLY. Do not say "Based on the search results" or "Here is the answer". Just state the facts.
-        4. If the context does not contain the answer, state that you do not know. Do not guess.
         """
 
         is_retry = state.get("hallucination_status") == "hallucinated"
         if is_retry:
-            prompt += "\n\nCRITICAL WARNING: Your previous answer was rejected because it contained facts NOT present in the search results. Rewrite it using ONLY the provided text."
+            human_prompt += "\n\nCRITICAL WARNING: Your previous answer was rejected because it contained facts NOT present in the search results. Rewrite it using ONLY the provided text."
 
         response = self.llm.invoke([
-            SystemMessage(content="Synthesize the search results into a cohesive answer."),
-            HumanMessage(content=prompt)
+            SystemMessage(content=Prompts.get_synthesizer_agent_prompt()),
+            HumanMessage(content=human_prompt)
         ])
 
         return {'messages': [response]}
@@ -255,16 +256,9 @@ class RagNodes:
 
 
         hallucination_grader_llm = self.llm.with_structured_output(GradeHallucinations)
-        system_prompt = """You are a grader assessing whether an LLM generation is grounded in / supported by a set of retrieved facts.
-        
-        CRITICAL GRADING RULES:
-        1. If the LLM response says "I cannot answer", "I don't know", or "No information found", and the provided facts are empty or irrelevant, this is GROUNDED ('yes').
-        2. If the LLM response contains specific numbers, dates, or names that are NOT present in the 'Set of facts', this is a HALLUCINATION ('no').
-        3. The answer must be derived ONLY from the provided facts. Do not allow outside knowledge.
-        
-        Give 'yes' or 'no'. 'yes' means grounded/faithful. 'no' means hallucinated."""
+
         grade = hallucination_grader_llm.invoke([
-            SystemMessage(content=system_prompt),
+            SystemMessage(content=Prompts.get_hallucination_grader_agent()),
             HumanMessage(content=f'Set of facts: \n\n {context} \n\n LLM generation: {generated_answer}')
         ])
         
@@ -282,7 +276,6 @@ class RagNodes:
     def error_agent(self, state: AgentState):
         logger.info("--- ERROR ---")
         return {'messages': [AIMessage(content='I could not process your request. Please try to be more specific with your question.')]}
-
 
     @staticmethod
     def validate_and_map(state: AgentState) -> Literal[NodeName.RESEARCH_WORKER, NodeName.ERROR]:
@@ -310,3 +303,43 @@ class RagNodes:
             
             return NodeName.SYNTHESIZER
         return END
+    
+    def _get_strategies(self, target: ExtractionScheme) -> Dict:
+        valid_year = self.db_repository.validate_filter(target.year, 'years')
+        valid_country = self.db_repository.validate_filter(target.country, 'countries')
+        valid_city = self.db_repository.validate_filter(target.city, 'cities')
+
+        strategies = []
+        strict_filter = {}
+        name_parts = []
+        if valid_country:
+            strict_filter['countries'] = [valid_country]
+            name_parts.append("Country")
+            
+        if valid_year:
+            strict_filter['years'] = [valid_year]
+            name_parts.append("Year")
+
+        if valid_city:
+            strict_filter['cities'] = [valid_city]
+            name_parts.append("City")
+            
+        if strict_filter:
+            strategies.append({
+                "filter": strict_filter,
+                "name": f"Smart Strict ({' + '.join(name_parts)})"
+            })
+        
+
+        # backup
+        if len(strict_filter) > 1:
+            if 'years' in strict_filter:
+                strategies.append({"filter": {'years': strict_filter['years']}, "name": "Relaxed (Year Only)"})
+            if 'countries' in strict_filter:
+                strategies.append({"filter": {'countries': strict_filter['countries']}, "name": "Relaxed (Country Only)"})
+            if 'cities' in strict_filter:
+                strategies.append({"filter": {'cities': strict_filter['cities']}, "name": "Relaxed (City Only)"})
+
+        strategies.append({"filter": {}, "name": "Pure Vector Search"})
+
+        return strategies
