@@ -1,7 +1,8 @@
 import traceback
-from typing import List, Dict, Any, Type
+from typing import List, Dict, Any, Set
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
+import ast
 
 from database.base.MyDocument import MyDocument
 from database.base.DbOperationResult import DbOperationResult
@@ -38,8 +39,10 @@ class QdrantDbRepository(BaseDbRepository):
         """Connects to the Qdrant gRPC client."""
         try:
             self.logger.info(f'Connecting to Qdrant at {self.ip}:{self.port}...')
-            # Using gRPC port by default as it's faster for service-to-service
+
             self.client = QdrantClient(host=self.ip, port=self.port, grpc_port=self.grpc_port)
+            self.valid_metadata = self._get_unique_metadata_values(['years', 'locations'])
+
             self.logger.info('Qdrant connection successful.')
             return DbOperationResult(success=True)
         except Exception as e:
@@ -120,6 +123,65 @@ class QdrantDbRepository(BaseDbRepository):
             return None
             
         return models.Filter(must=must_conditions)
+    
+
+    def _get_unique_metadata_values(self, target_fields: List[str]) -> Dict[str, List[str]]:
+        unique_data: Dict[str, Set[Any]] = {field: set() for field in target_fields}
+        next_offset = None
+        while True:
+            records, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                with_payload=target_fields,
+                with_vectors=False,
+                limit=100,
+                offset=next_offset
+            )
+            
+            for record in records:
+                if not record.payload:
+                    continue
+                    
+                for field in target_fields:
+                    raw_value = record.payload.get(field)
+                    if raw_value is None:
+                        continue
+
+                    items_to_add = []
+
+                    if isinstance(raw_value, str) and raw_value.strip().startswith('[') and raw_value.strip().endswith(']'):
+                        try:
+                            parsed = ast.literal_eval(raw_value)
+                            if isinstance(parsed, list):
+                                items_to_add = parsed
+                            else:
+                                items_to_add = [parsed]
+                        except (ValueError, SyntaxError):
+                            items_to_add = [raw_value]
+                    elif isinstance(raw_value, list):
+                        items_to_add = raw_value
+                    else:
+                        items_to_add = [raw_value]
+
+                    for item in items_to_add:
+                        if field == 'years':
+                            try:
+                                unique_data[field].add(int(item))
+                            except (ValueError, TypeError):
+                                unique_data[field].add(item)
+                        else:
+                            unique_data[field].add(item)
+            
+            if next_offset is None:
+                break
+
+        result = {}
+        for field, values in unique_data.items():
+            try:
+                result[field] = sorted(list(values))
+            except TypeError:
+                result[field] = sorted(list(values), key=lambda x: str(x))
+                
+        return result
 
     def search(
         self, 
@@ -226,7 +288,6 @@ class QdrantDbRepository(BaseDbRepository):
         if isinstance(value, str):
             value = value.lower()
         
-        print(f'key_name: {key_name}, value: {value}')
         if value:
             count_result = self.client.count(
                 collection_name=self.collection_name,
@@ -297,7 +358,7 @@ class QdrantDbRepository(BaseDbRepository):
                     indices=doc.sparse_embedding.indices,
                     values=doc.sparse_embedding.values
                 )
-                
+            
             point = models.PointStruct(
                 id=str(doc.id),
                 vector=vector_payload,

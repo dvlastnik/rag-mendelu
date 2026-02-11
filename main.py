@@ -1,7 +1,6 @@
 import argparse
 import os
 import time
-import logging
 from dotenv import load_dotenv
 import datetime
 from pathlib import Path
@@ -10,7 +9,7 @@ from database.QdrantDbRepository import QdrantDbRepository
 from database.base.BaseDbRepository import BaseDbRepository
 from etl.DroughEtl import DroughEtl
 from llm_handler.LLMHandler import LLMHandler
-from metadata_extractor.LLMMetadataExtractor import LLMMetadataExtractor
+from metadata_extractor.graph import build_extractor_graph
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 from rag.AgenticRAG import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
@@ -40,13 +39,12 @@ def run_etl_drough(path: str, delete_collection: bool, embedding_service: TextEm
         # TODO: Remove, this is only mocked this else branch should raise exception
         pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
         # raise FileNotFoundError(f'Folder path argument is not set: {folder_path}.')
-    # pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/Provisional_State_of_the_Climate_2022_en.pdf']
+        # pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/Provisional_State_of_the_Climate_2022_en.pdf']
 
     db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
     db_repository.connect_and_create_collection(delete_collection)
 
-    # metadata extractor
-    metadata_extractor = LLMMetadataExtractor(llm_handler=llm_handler)
+    metadata_extractor = build_extractor_graph()
 
     for file in pdf_files:
         start_time = time.time()
@@ -78,8 +76,8 @@ def check_databases(db_repository: BaseDbRepository):
     db_repository.logger.info(f'Rows in drough: {db_repository.get_count()}')
     filenames = db_repository.get_all_filenames()
     db_repository.logger.info(f'Ingested files in db: {filenames} (size: {len(filenames)})')
+    db_repository.logger.info(f'Metadata from database: {db_repository.valid_metadata}')
     db_repository.close()
-    
 
 def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository):
     """

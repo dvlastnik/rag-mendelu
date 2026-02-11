@@ -4,9 +4,8 @@ from typing import List
 from rag.agents.enums import Intent
 
 class ExtractionScheme(BaseModel):
-    country: str | None
-    city: str | None
-    year: str | None
+    location: str | None
+    year: int | None
     topics: List[str]
 
 class GeneralOrRagDecision(BaseModel):

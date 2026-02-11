@@ -10,8 +10,6 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from etl.BaseEtl import BaseEtl, ETLState
 from database.base.MyDocument import MyDocument, SparseVector
 from text_embedding_api.TextEmbeddingService import ChunkAndEmbedResponse
-from metadata_extractor.LLMMetadataExtractor import LLMMetadataExtractor
-from metadata_extractor.models import DroughMetadata
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -19,7 +17,7 @@ logger = get_logger(__name__)
 MAX_SAFE_CHUNK_SIZE = 2000
 
 class DroughEtl(BaseEtl):
-    def __init__(self, filepath, db_repositories, embedding_service, metadata_extractor: LLMMetadataExtractor):
+    def __init__(self, filepath, db_repositories, embedding_service, metadata_extractor):
         super().__init__(filepath, db_repositories, embedding_service)
         self.metadata_extractor = metadata_extractor
 
@@ -82,21 +80,11 @@ class DroughEtl(BaseEtl):
         """
         Cleans the page_content of a LangChain Document by fixing
         PDF/Markdown extraction artifacts.
-        
-        - Removes Markdown image comments (e.g., ).
-        - Removes entire lines that are just figure/source references.
-        - Replaces non-breaking spaces (\xa0) with regular spaces.
-        - Fixes hyphenation across newlines (e.g., "Govern-\nment" -> "Government").
-        - Removes lines that *only* contain numbers (page numbers).
-        - Removes "flattened" endnote numbers (e.g., "...climate. 19 This...")
-        - Replaces single newlines (line breaks) with spaces (joins broken sentences).
-        - Collapses multiple newlines (paragraph breaks) into a single newline.
-        - Removes bracketed citation markers (e.g., [1], [22]).
-        - Removes URLs.
-        - Removes extra whitespace and stray backslashes.
         """
         text = doc.page_content
-        text = text.replace('', '')
+        text = re.sub(r'', '', text, flags=re.DOTALL)
+        text = re.sub(r'<!-- image -->', '', text, flags=re.IGNORECASE)
+        text = text.replace('\x00', '')
         text = re.sub(r'^\s*(Figure|Source:).*$', '', text, flags=re.MULTILINE)
         text = re.sub(r'https?://\S+', '', text)
         text = text.replace('\xa0', ' ')
@@ -160,8 +148,7 @@ class DroughEtl(BaseEtl):
                 merged[key] = list(set(combined))
                 
             else:
-                str_values = [str(v) for v in values]
-                most_common = Counter(str_values).most_common(1)[0][0]
+                most_common = Counter(values).most_common(1)[0][0]
                 merged[key] = most_common
 
         return merged
@@ -188,16 +175,18 @@ class DroughEtl(BaseEtl):
             extracted_objects = []
             for i, segment in enumerate(segments):
                 try:
-                    meta_obj = self.metadata_extractor.extract_metadata(
-                        prompt=DroughMetadata.DROUGH_METADATA_PROMPT.format(input_text=segment),
-                        response_scheme=DroughMetadata.DroughMetadata
-                    )
-                    extracted_objects.append(meta_obj.model_dump())
+                    metadata_from_agent = self.metadata_extractor.invoke({'text_chunk': segment})
+                    appending_metadata = {
+                        'years': metadata_from_agent['clean_data']['years'],
+                        'locations': metadata_from_agent['clean_data']['locations']
+                    }
+                    extracted_objects.append(appending_metadata)
 
                 except (TimeoutError, httpx.ReadTimeout, httpx.ConnectTimeout):
                     logger.error(f"   [Segment {i+1}] OLLAMA TIMEOUT. Skipping segment.")
                     break
                 except Exception as e:
+                    traceback.print_exc()
                     logger.error(f"   [Segment {i+1}] General Error: {e}")
                     continue
 
@@ -207,17 +196,17 @@ class DroughEtl(BaseEtl):
 
             aggregated_data = self._merge_metadata_dicts(extracted_objects)
             final_metadata = existing_metadata.copy() | aggregated_data
-
+            
             processed_metadata = {}
             for key, value in final_metadata.items():
                 if value is None:
                     continue
-                    
+                
                 if isinstance(value, str):
                     processed_metadata[key] = self._sanitize_string(value.lower())
                 elif isinstance(value, list):
                     processed_metadata[key] = sorted(list(set([
-                        self._sanitize_string(str(item).lower()) 
+                        self._sanitize_string(item.lower()) if isinstance(item, str) else item
                         for item in value
                     ])))
                 else:
@@ -257,45 +246,61 @@ class DroughEtl(BaseEtl):
             traceback.print_exc()
             return None
 
-    def _process_document(self, text: str, metadata: Dict) -> List[MyDocument]:
+    def _process_document(self, text: str, base_metadata: Dict) -> List[MyDocument]:
         if len(text) < 50:
             return []
 
-        processed_chunks = []
-        chunk_and_embed_result: List[ChunkAndEmbedResponse] = []
+        segments_to_process = [MyDocument(id='null', text=text, metadata=base_metadata.copy())]
         if len(text) > MAX_SAFE_CHUNK_SIZE:
-            logger.warning(f"Text too large ({len(text)} chars). Pre-splitting locally to prevent OOM.")
+            logger.warning(f"Text too large ({len(text)} chars). Pre-splitting locally.")
             pre_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=MAX_SAFE_CHUNK_SIZE,
                 chunk_overlap=200,
                 separators=["\n\n", "\n", " ", ""]
             )
-            smaller_chunks = pre_splitter.split_text(text)
-            length = len(smaller_chunks)
-            logger.info(f' - Smaller chunks len: {length}')
-
-            for i, chunk in enumerate(smaller_chunks):
-                try:
-                    logger.info(f' - [{i+1}/{length}] ...')
-                    response = self.embedding_service.chunk_and_embed(data=chunk)
-                    if response:
-                        chunk_and_embed_result.extend(response)
-                        logger.info(f' - [{i+1}/{length}] Done')
-                    else:
-                        logger.info(f' - [{i+1}/{length}] Response was none: {response}')
-                except Exception as e:
-                    logger.error(f"Failed to embed sub-chunk {i}: {e}")
-        else:
-            chunk_and_embed_result = self.embedding_service.chunk_and_embed(data=text)
-        
-        for chunk in chunk_and_embed_result:
-            chunk.text = chunk.text.lstrip(',')
+            raw_texts = pre_splitter.split_text(text)
             
-            final_document = self._create_document_from_chunk(chunk, metadata)
-            if final_document:
-                processed_chunks.append(final_document)
+            segments_to_process: List[MyDocument] = []
+            for t in raw_texts:
+                segments_to_process.append(MyDocument(id='null',text=t, metadata=base_metadata.copy()))
+            
+            logger.info(f' - Smaller chunks len: {len(segments_to_process)}')
 
-        return processed_chunks
+        processed_final_docs = []
+        for i, segment in enumerate(segments_to_process):
+            current_text = segment.text
+            current_base_metadata = segment.metadata
+
+            enhanced_metadata = self._extract_section_metadata(
+                text=current_text,
+                existing_metadata=current_base_metadata
+            )
+            
+            try:
+                if len(segments_to_process) > 1:
+                    logger.info(f' - [{i+1}/{len(segments_to_process)}] Processing segment...')
+                
+                response_chunks = self.embedding_service.chunk_and_embed(data=current_text)
+                
+                if not response_chunks:
+                    logger.warning(f' - [{i+1}/{len(segments_to_process)}] Response was empty')
+                    continue
+
+                for semantic_chunk in response_chunks:
+                    semantic_chunk.text = semantic_chunk.text.lstrip(',')
+                    
+                    final_document = self._create_document_from_chunk(
+                        semantic_chunk,
+                        enhanced_metadata
+                    )
+                    
+                    if final_document:
+                        processed_final_docs.append(final_document)
+
+            except Exception as e:
+                logger.error(f"Failed to process segment {i}: {e}")
+
+        return processed_final_docs
 
     def transform(self) -> None:
         try:
@@ -314,13 +319,10 @@ class DroughEtl(BaseEtl):
 
                 logger.info(f"[{index}/{total_docs}] Processing section of length: {len(cleaned_doc.page_content)}...")
 
-                enhanced_metadata = self._extract_section_metadata(
-                    text=cleaned_doc.page_content, 
-                    existing_metadata=cleaned_doc.metadata
-                )
+                cleaned_metadata = cleaned_doc.metadata.copy()
+                cleaned_metadata['parent_text'] = cleaned_doc.page_content
 
-                processed_docs = self._process_document(cleaned_doc.page_content, enhanced_metadata)
-                
+                processed_docs = self._process_document(cleaned_doc.page_content, cleaned_metadata)
                 if processed_docs:
                     self.documents.extend(processed_docs)
                     logger.debug(f" -> Generated {len(processed_docs)} chunks.")

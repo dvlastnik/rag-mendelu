@@ -48,7 +48,7 @@ def evaluation_logger(model_name):
         output_dir = get_results_filepath(model_name)
         os.makedirs(output_dir, exist_ok=True)
         
-        output_path = os.path.join(output_dir, 'judgement_report.json')
+        output_path = os.path.join(output_dir, f'judgement_report_{model_name}.json')
         answers_path = os.path.join(output_dir, 'answers.json')
 
         duration = 0

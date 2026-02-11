@@ -16,6 +16,7 @@ class BaseDbRepository(ABC):
         self.collection_name = collection_name
         self.metadata = metadata
         self.logger = get_logger(self.name)
+        self.valid_metadata = {}
 
     def connect_and_create_collection(self, delete_collection: bool):
         execute_and_check_db_operation(operation=self.connect, operation_description=f".connect() {self.name}")

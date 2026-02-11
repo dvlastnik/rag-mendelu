@@ -17,6 +17,8 @@ import constants
 
 def get_results_filepath(model_name: str) -> str:
     current_timestamp = datetime.now().strftime("%y%m%d")
+    if '/' in model_name:
+        model_name = model_name.replace('/', '_')
     return f'tests/rag/results/answers_{current_timestamp}_{model_name}'
 
 def load_questions(filepath: str) -> List[Dict[str, any]]:
@@ -67,15 +69,15 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             response = rag.chat(question)
             generated_text = response['response']
             state = response['agent_state']
-            rewritten_query = state['rewritten_query']
+            original_query = state['original_query']
+            rewritten_query = state['final_query']
 
             expanded_queries = []
             extracted_data = []
             for e in state['extracted_data']:
                 extracted_data.append({
                     'year': e.year,
-                    'country': e.country,
-                    'city': e.city,
+                    'location': e.location,
                     'topics': e.topics
                 })
 
@@ -97,13 +99,14 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             'generated_answer': generated_text,
             'retrieved_sources': retrieved_docs,
             'extracted_data': extracted_data,
-            'rewritten_query': rewritten_query,
+            'original_query': original_query,
+            'final_query': rewritten_query,
             'expanded_queries': expanded_queries
         })
 
     return results
 
-def generate_answers(model_name: str, questions_filepath: str):
+def generate_answers_file(model_name: str, questions_filepath: str):
     questions = load_questions(questions_filepath)
 
     start_time = time.time()

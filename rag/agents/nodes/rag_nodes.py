@@ -4,7 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.types import Send
 from langgraph.graph import END
 from flashrank import Ranker, RerankRequest
-from qdrant_client import models
+import difflib
 
 from database.base.MyDocument import MyDocument
 from rag.agents.state import AgentState, WorkerState
@@ -25,39 +25,120 @@ class RagNodes:
         self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2')
         
     def query_rewriter_agent(self, state: AgentState):
-        logger.info("--- QUERY REWRITING ---")
-        original_query = state['messages'][-1].content
+        logger.info("--- QUERY REWRITER ---")
+    
+        original_query = state.get('original_query') or state['messages'][-1].content
+        feedback = state.get('feedback')
+        retry_count = state.get('retry_count', 0)
 
-        history_text = "\n".join([f"{m.type}: {m.content}" for m in state['messages'][:-1]])
-        user_input = f"History:\n{history_text}\nInput: \"{original_query}\"\nOutput:"
+        user_msg_content = f"Input Query: \"{original_query}\""
+        
+        if feedback:
+            user_msg_content += f"\n\nPREVIOUS ATTEMPT FAILED:\nCritique: {feedback}\n\nTask: Rewrite the query again, fixing the issues mentioned above."
 
+        print(f'user msg content: {user_msg_content}')
         response = self.llm.invoke([
             SystemMessage(content=Prompts.get_query_rewriter_agent_prompt()),
-            HumanMessage(content=user_input)
+            HumanMessage(content=user_msg_content)
         ])
-
-        logger.info(f"Original: {original_query}")
-        logger.info(f"Rewritten: {response.content}")
         
-        return {"rewritten_query": response.content}
+        new_candidate = response.content.strip()
+        
+        logger.info(f"Draft #{retry_count + 1}: {new_candidate}")
+
+        return {
+            "original_query": original_query,
+            "candidate_query": new_candidate,
+            "retry_count": retry_count + 1
+        }
+    
+    def query_verifier_agent(self, state: AgentState):
+        logger.info('--- QUERY VERIFIER ---')
+        
+        original_query = state.get('original_query')
+        candidate_query = state.get('candidate_query')
+        
+        verification_input = f"""
+        [Original Query]: {original_query}
+        [Rewritten Query]: {candidate_query}
+        """
+        
+        response = self.llm.invoke([
+            SystemMessage(content=Prompts.get_query_verifier_prompt()),
+            HumanMessage(content=verification_input)
+        ])
+        
+        raw_output = response.content
+        logger.info(f'Verifier Thought: {raw_output}')
+
+        decision = 'PASS'
+        reasoning = 'No reasoning provided.'
+        
+        if 'REASONING:' in raw_output:
+            parts = raw_output.split('DECISION:')
+            reasoning = parts[0].replace('REASONING:', '').strip()
+        
+        if 'DECISION: FAIL' in raw_output.upper():
+            decision = 'FAIL'
+        
+        if decision == 'PASS':
+            logger.info('✅ Query Verified.')
+            return {
+                'final_query': candidate_query, 
+                "feedback": None
+            }
+        else:
+            logger.warning(f'❌ Verification Failed. Feedback: {reasoning}')
+            return {
+                "feedback": reasoning,
+                "final_query": None
+            }
     
     def extractor_agent(self, state: AgentState):
         logger.info("--- EXTRACTING TARGETS ---")
-        query = state['rewritten_query']
-        if not query:
-            query = state['messages'][-1].content
-        
-        logger.info(f"extracting in: {query}")
-        extractor = self.llm.with_structured_output(MultiExtraction)
+        query = state['messages'][-1].content
+        valid_data = self.db_repository.valid_metadata
+        valid_years = [str(y) for y in valid_data['years']]
+        valid_locations = valid_data['locations']
 
+        system_prompt = Prompts.get_extractor_agent_prompt()
+        
+        extractor = self.llm.with_structured_output(MultiExtraction)
         result = extractor.invoke([
-            SystemMessage(content=Prompts.get_extractor_agent_prompt()),
+            SystemMessage(content=system_prompt),
             HumanMessage(content=query)
         ])
         
-        extracted_data = cast(MultiExtraction, result).targets
-        
-        return {"extracted_data": extracted_data}
+        raw_extraction = cast(MultiExtraction, result)
+        final_targets = []
+        for item in raw_extraction.targets:
+            if item.year:
+                if str(item.year) in valid_years:
+                    pass
+                else:
+                    logger.warning(f'Dropping invalid year: {item.year}')
+                    item.year = None
+
+            item.location = item.location.lower()
+            if item.location:
+                if item.location == 'global':
+                    item.location = None
+                elif item.location in valid_locations:
+                    pass
+                else:
+                    matches = difflib.get_close_matches(item.location, valid_locations, n=1, cutoff=0.6)
+                    print(f'matches: {matches}')
+                    if matches:
+                        logger.info(f"Fuzzy Match: '{item.location}' mapped to '{matches[0]}'")
+                        item.location = matches[0]
+                    else:
+                        logger.warning(f"No match found for location: '{item.location}'")
+                        item.location = None
+            
+            final_targets.append(item)
+
+        logger.info(f"Final Targets: {final_targets}")
+        return {'extracted_data': final_targets}
     
     def research_worker_v2(self, state: WorkerState):
         target = state.get('target')
@@ -67,7 +148,7 @@ class RagNodes:
         expanded_query = search_text
         if target.topics:
             topics_str = ', '.join(target.topics)
-            expanded_query = f'{expanded_query} | {topics_str}'
+            expanded_query = f'{expanded_query} {topics_str}'
         
         logger.info(f'Expanded query: {expanded_query}')
         try:
@@ -121,7 +202,7 @@ class RagNodes:
         expanded_query = search_text
         if target.topics:
             topics_str = ', '.join(target.topics)
-            expanded_query = f'{expanded_query}\n{topics_str}'
+            expanded_query = f'{expanded_query} {topics_str}'
         
         logger.info(f'Expanded query: {expanded_query}')
         try:
@@ -137,39 +218,66 @@ class RagNodes:
             logger.info(f"Worker Embedding Error: {e}")
             return {'search_results': []}
         
-        search_filters = {}
-        if target.country:
-            search_filters['countries'] = [target.country.lower()]
-        if target.year:
-            search_filters['years'] = [target.year]
-        if target.city:
-            search_filters['cities'] = [target.city.lower()]
+        # search_filters = {}
+        # if target.location:
+        #     search_filters['locations'] = [target.location.lower()]
+        # if target.year:
+        #     search_filters['years'] = [target.year]
 
-        db_result = self.db_repository.search(
-            text_embedded=dense_vec,
-            sparse_embedded=sparse_vec,
-            filter_dict=search_filters,
-            n_results=10
-        )
-        if not db_result.success:
-            return {'search_results': [f"Database Error: {db_result.message}"]}
-        
-        if len(db_result.data) == 0:
+        # db_result = self.db_repository.search(
+        #     text_embedded=dense_vec,
+        #     sparse_embedded=sparse_vec,
+        #     filter_dict=search_filters,
+        #     n_results=10
+        # )
+
+        # found_docs = []
+        # if db_result.success and len(db_result.data) > 0:
+        #     found_docs = [doc for doc in db_result.data]
+        # else:
+        #     logger.warning(f"Search failed for strict filters: {search_filters}")
+            
+        #     broad_result = self.db_repository.search(
+        #         text_embedded=dense_vec,
+        #         sparse_embedded=sparse_vec,
+        #         n_results=5
+        #     )
+            
+        #     if broad_result.data:
+        #         warning_header = f"""
+        #         [SYSTEM WARNING]: Exact matches for {search_filters} were NOT found. 
+        #         The following information is semantically relevant but might be from different years or locations.
+        #         Verify dates carefully.
+        #         """
+        #         found_docs = [MyDocument(id='warning', text=warning_header)] + [doc for doc in broad_result.data]
+        #         print(found_docs)
+
+        # if not found_docs:
+        #     return {'search_results': [f"No data found."]}
+        strategies = self._get_strategies(target)
+        raw_docs = []
+        for strategy in strategies:
+            logger.info(f"Trying Strategy: {strategy['name']}")
             db_result = self.db_repository.search(
                 text_embedded=dense_vec,
                 sparse_embedded=sparse_vec,
+                filter_dict=strategy['filter'],
                 n_results=10
             )
+
+            if db_result.success and len(db_result.data) > 0:
+                raw_docs = db_result.data
+                logger.info(f"✅ Found {len(raw_docs)} docs using {strategy['name']}")
+                break
         
-        found_docs = [doc for doc in db_result.data]
-        if not found_docs:
-            return {'search_results': [f"No detailed data found for {target}."]}
+        if not raw_docs:
+            return {'search_results': [f"No data found for {target}."]}
             
-        return {'search_results': found_docs}
+        return {'search_results': raw_docs}
     
     def retrieval_grader_agent(self, state: AgentState):
         logger.info("--- GRADING RETRIEVED DOCS ---")
-        question = state.get('rewritten_query')
+        question = state.get('query')
         raw_documents = state.get('search_results')
         if len(raw_documents) == 0:
             return {'filtered_results': []}
@@ -280,7 +388,7 @@ class RagNodes:
     @staticmethod
     def validate_and_map(state: AgentState) -> Literal[NodeName.RESEARCH_WORKER, NodeName.ERROR]:
         data = state.get('extracted_data', [])
-        query = state.get('rewritten_query')
+        query = state.get('final_query') or state.get(f'original_query')
         
         if not data:
             return NodeName.ERROR
@@ -304,25 +412,34 @@ class RagNodes:
             return NodeName.SYNTHESIZER
         return END
     
+    @staticmethod
+    def should_retry(state: AgentState) -> str:
+        feedback = state.get('feedback')
+        retry_count = state.get('retry_count', 0)
+        MAX_RETRIES = 3
+
+        if feedback is None:
+            return NodeName.EXTRACTOR
+        
+        if retry_count < MAX_RETRIES:
+            return NodeName.QUERY_REWRITER
+        
+        return NodeName.EXTRACTOR
+    
     def _get_strategies(self, target: ExtractionScheme) -> Dict:
         valid_year = self.db_repository.validate_filter(target.year, 'years')
-        valid_country = self.db_repository.validate_filter(target.country, 'countries')
-        valid_city = self.db_repository.validate_filter(target.city, 'cities')
+        valid_location = self.db_repository.validate_filter(target.location, 'locations')
 
         strategies = []
         strict_filter = {}
         name_parts = []
-        if valid_country:
-            strict_filter['countries'] = [valid_country]
-            name_parts.append("Country")
+        if valid_location:
+            strict_filter['locations'] = [valid_location]
+            name_parts.append("Location")
             
         if valid_year:
             strict_filter['years'] = [valid_year]
             name_parts.append("Year")
-
-        if valid_city:
-            strict_filter['cities'] = [valid_city]
-            name_parts.append("City")
             
         if strict_filter:
             strategies.append({
@@ -335,10 +452,8 @@ class RagNodes:
         if len(strict_filter) > 1:
             if 'years' in strict_filter:
                 strategies.append({"filter": {'years': strict_filter['years']}, "name": "Relaxed (Year Only)"})
-            if 'countries' in strict_filter:
-                strategies.append({"filter": {'countries': strict_filter['countries']}, "name": "Relaxed (Country Only)"})
-            if 'cities' in strict_filter:
-                strategies.append({"filter": {'cities': strict_filter['cities']}, "name": "Relaxed (City Only)"})
+            if 'locations' in strict_filter:
+                strategies.append({"filter": {'locations': strict_filter['locations']}, "name": "Relaxed (Location Only)"})
 
         strategies.append({"filter": {}, "name": "Pure Vector Search"})
 

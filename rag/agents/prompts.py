@@ -28,38 +28,90 @@ class Prompts:
     
     @staticmethod
     def get_query_rewriter_agent_prompt() -> str:
-        return """You are a Query Refinement Engine for a vector database. Your objective is to optimize user inputs for semantic similarity search.
+        return """You are a Search Query Optimizer. 
+        
+        **Task:** Convert the user's complex question into a concise, keyword-focused search string optimized for vector retrieval.
 
-        **Instructions:**
-        1.  **Analyze:** Identify the core intent, key entities, and important technical terms in the user's input.
-        2.  **Expand:** Include relevant synonyms, domain-specific terminology, and related concepts that increase the likelihood of a vector match.
-        3.  **Clean:** Remove conversational filler (e.g., "I want to find", "Please show me", "Hello"), stop words, and ambiguity.
-        4.  **Output:** Return **ONLY** the rewritten query string. Do not include explanations, labels, or conversational text.
+        **CRITICAL OUTPUT RULES:**
+        1. **OUTPUT ONLY** the rewritten string. 
+        2. **NO EXPLANATION** or filler text.
+        3. **DO NOT** answer the question. Only format it for search.
+        4. **Key Entities:** Preserve all proper nouns, error codes, and years exactly.
 
         **Examples:**
-        Input: best way to cook a steak
-        Output: steak cooking methods recipe grilling pan-searing medium-rare preparation guide culinary tips
+        Input: "flooding events in Sahel 2024"
+        Output: Sahel flooding heavy rainfall inundation 2024
 
-        Input: reviews for the new electric bmw
-        Output: BMW electric vehicle EV reviews i4 iX performance range battery life user ratings automotive specs
+        Input: "tropical nights in Europe"
+        Output: Europe tropical nights temperature >20C heat stress
+        """
 
-        Input: where should I go for vacation in italy
-        Output: Italy travel recommendations tourism destinations Rome Venice Florence Amalfi Coast landmarks sightseeing
+    @staticmethod
+    def get_query_verifier_prompt() -> str:
+       return """You are a Search Logic Validator. 
+        
+        **Goal:** Decide if the Rewritten Query is safe for a Search Engine.
+        
+        **The Golden Rule:** - Vector Databases PREFER keywords over grammar. 
+        - "Europe flood 2024" is BETTER than "What happened in Europe?"
+        
+        **PASS Conditions (Output 'PASS'):**
+        1. The Core Entities are present (e.g., 'Europe', '2024').
+        2. The Core Subject is present (e.g., 'Flood', 'Inundation').
+        3. Synonyms are acceptable (e.g., 'Significant' -> 'Severe' or 'Major' is OK).
+        4. Grammar is broken (e.g., "Flood Europe 2024" is a PASS).
+
+        **FAIL Conditions (Output 'FAIL'):**
+        1. CRITICAL: The Year or Location was changed (e.g., 2024 -> 2023).
+        2. CRITICAL: The meaning is inverted (e.g., Flood -> Drought).
+        3. CRITICAL: The user asked for "Countries" but the rewrite removed that intent completely.
+
+        **Output Format:**
+        REASONING: <Brief comparison of entities>
+        DECISION: <PASS or FAIL>
         """
     
     @staticmethod
     def get_extractor_agent_prompt() -> str:
-        return """You are a Metadata Extraction Specialist. Your task is to extract structured entities from a search query and output them in a specific JSON format.
-
-        **Target JSON Structure:**
-        ```json
+        return """You are a Metadata Extraction Specialist.
+        
+        **Task:** Extract specific search filters from the user query.
+        
+        **CRITICAL RULES:**
+        1. **Titles are NOT Protected:** You must extract Years and Locations even if they are part of a document title (e.g., "State of the Global Climate 2023").
+        2. **Year Format:** Return the Year as an **INTEGER** (e.g., 2023), NOT a string.
+        3. **Location:** Extract countries, regions, or "Global".
+        
+        **Examples:**
+        
+        User: "WMO State of the Global Climate 2023 report"
+        Output:
         {
-        "country": "string or null",
-        "city": "string or null",
-        "year": "string or null (4-digit year)",
-        "topics": ["list", "of", "keywords"],
+          "targets": [
+            {
+              "location": "Global",
+              "year": 2023,
+              "topics": ["WMO", "State of the Climate", "report"]
+            }
+          ]
         }
-        ```
+
+        User: "Floods in Brazil and Peru 2024"
+        Output:
+        {
+          "targets": [
+            {
+              "location": "Brazil",
+              "year": 2024,
+              "topics": ["Floods", "rainfall"]
+            },
+            {
+              "location": "Peru",
+              "year": 2024,
+              "topics": ["Floods", "rainfall"]
+            }
+          ]
+        }
         """
     
     @staticmethod

@@ -1,5 +1,6 @@
 from langgraph.graph import StateGraph, START, END
-from langchain.chat_models import init_chat_model
+#from langchain.chat_models import init_chat_model
+from langchain_ollama import ChatOllama
 
 from rag.agents.state import AgentState
 from rag.agents.enums import NodeName
@@ -12,11 +13,12 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbeddingService, model_name: str = 'ibm/granite4:1b'):
-    llm = init_chat_model(
+def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbeddingService, model_name: str = 'ibm/granite4:3b'):
+    llm = ChatOllama(
         model=model_name,
-        model_provider='ollama',
-        temperature=0
+        temperature=0,
+        num_ctx=2048, 
+        keep_alive='5m'
     )
     
     router_nodes = GeneralNodes(llm)
@@ -28,6 +30,7 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     builder.add_node(NodeName.GENERAL, router_nodes.general_agent)
     # rag
     builder.add_node(NodeName.QUERY_REWRITER, rag_nodes.query_rewriter_agent)
+    builder.add_node(NodeName.QUERY_VERIFIER, rag_nodes.query_verifier_agent)
     builder.add_node(NodeName.EXTRACTOR, rag_nodes.extractor_agent)
     builder.add_node(NodeName.RESEARCH_WORKER, rag_nodes.research_worker)
     builder.add_node(NodeName.RETRIEVAL_GRADER_AGENT, rag_nodes.retrieval_grader_agent)
@@ -44,7 +47,16 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     )
     builder.add_edge(NodeName.GENERAL, END)
     # rag
-    builder.add_edge(NodeName.QUERY_REWRITER, NodeName.EXTRACTOR)
+    builder.add_edge(NodeName.QUERY_REWRITER, NodeName.QUERY_VERIFIER)
+    builder.add_conditional_edges(
+        NodeName.QUERY_VERIFIER,
+        RagNodes.should_retry,
+        path_map={
+            NodeName.QUERY_REWRITER: NodeName.QUERY_REWRITER,
+            NodeName.EXTRACTOR: NodeName.EXTRACTOR
+        }
+    )
+    
     builder.add_conditional_edges(
         NodeName.EXTRACTOR,
         RagNodes.validate_and_map,

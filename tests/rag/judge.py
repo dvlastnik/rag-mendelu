@@ -18,7 +18,6 @@ class Judge:
         self.structured_llm = self.llm.with_structured_output(Judgement)
 
     def evaluate(self, question: str, answer: str, context: list[str], ground_truth: str = None):
-        # Flatten context (Limit to top 3 to prevent timeouts)
         context_text = "\n".join(context[:3]) 
 
         prompt = f"""
@@ -44,7 +43,7 @@ class Judge:
 
         --- PASS/FAIL RULE ---
         - Set 'pass_fail' to TRUE if AND ONLY IF:
-          (Relevancy >= 4) AND (Faithfulness >= 4)
+          (Relevancy > 3) AND (Faithfulness > 3)
         - Otherwise, set FALSE.
         """
 
