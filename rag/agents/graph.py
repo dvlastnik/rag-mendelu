@@ -17,7 +17,7 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     llm = ChatOllama(
         model=model_name,
         temperature=0,
-        num_ctx=2048, 
+        num_ctx=8192, 
         keep_alive='5m'
     )
     
@@ -30,7 +30,6 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     builder.add_node(NodeName.GENERAL, router_nodes.general_agent)
     # rag
     builder.add_node(NodeName.QUERY_REWRITER, rag_nodes.query_rewriter_agent)
-    builder.add_node(NodeName.QUERY_VERIFIER, rag_nodes.query_verifier_agent)
     builder.add_node(NodeName.EXTRACTOR, rag_nodes.extractor_agent)
     builder.add_node(NodeName.RESEARCH_WORKER, rag_nodes.research_worker)
     builder.add_node(NodeName.RETRIEVAL_GRADER_AGENT, rag_nodes.retrieval_grader_agent)
@@ -47,15 +46,7 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     )
     builder.add_edge(NodeName.GENERAL, END)
     # rag
-    builder.add_edge(NodeName.QUERY_REWRITER, NodeName.QUERY_VERIFIER)
-    builder.add_conditional_edges(
-        NodeName.QUERY_VERIFIER,
-        RagNodes.should_retry,
-        path_map={
-            NodeName.QUERY_REWRITER: NodeName.QUERY_REWRITER,
-            NodeName.EXTRACTOR: NodeName.EXTRACTOR
-        }
-    )
+    builder.add_edge(NodeName.QUERY_REWRITER, NodeName.EXTRACTOR)
     
     builder.add_conditional_edges(
         NodeName.EXTRACTOR,
@@ -63,6 +54,7 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
         path_map={NodeName.RESEARCH_WORKER: NodeName.RESEARCH_WORKER, NodeName.ERROR: NodeName.ERROR}
     )
     builder.add_edge(NodeName.ERROR, END)
+    # builder.add_edge(NodeName.EXTRACTOR, NodeName.RESEARCH_WORKER)
 
     builder.add_edge(NodeName.RESEARCH_WORKER, NodeName.RETRIEVAL_GRADER_AGENT)
     builder.add_edge(NodeName.RETRIEVAL_GRADER_AGENT, NodeName.SYNTHESIZER)

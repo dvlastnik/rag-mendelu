@@ -53,10 +53,6 @@ class BaseEtl(ABC):
         return ETLState.LOADED
 
     @abstractmethod
-    def _row_to_document(self, row) -> MyDocument:
-        raise NotImplementedError("Method ._row_to_document() has to be implemented in subclass.")
-    
-    @abstractmethod
     def get_file_path(self, only_folder: bool = False, chunk_index: int | None = None) -> pathlib.Path:
         raise NotImplementedError("Method .get_file_path() has to be implemented in subclass.")
 

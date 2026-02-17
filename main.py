@@ -7,8 +7,7 @@ from pathlib import Path
 
 from database.QdrantDbRepository import QdrantDbRepository
 from database.base.BaseDbRepository import BaseDbRepository
-from etl.DroughEtl import DroughEtl
-from llm_handler.LLMHandler import LLMHandler
+from etl.DroughEtl import DroughtEtl
 from metadata_extractor.graph import build_extractor_graph
 from text_embedding_api.TextEmbeddingService import TextEmbeddingService
 from rag.AgenticRAG import AgenticRAG
@@ -21,7 +20,14 @@ load_dotenv()
 setup_logging()
 logger = get_logger(__name__)
 
-def run_etl_drough(path: str, delete_collection: bool, embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, llm_handler: LLMHandler):
+def run_etl_drough(
+        path: str, 
+        delete_collection: bool, 
+        embedding_service: TextEmbeddingService, 
+        db_repository: BaseDbRepository, 
+        collection_name: str, 
+        use_recursive_chunking: bool
+    ):
     """Runs the Drough (PDF) ETL pipeline on all files."""
     highlight_log(logger, "Starting Drough ETL pipeline...")
     if path != '':
@@ -37,24 +43,32 @@ def run_etl_drough(path: str, delete_collection: bool, embedding_service: TextEm
             raise FileNotFoundError(f'Folders or file at location {path_obj} not found')
     else:
         # TODO: Remove, this is only mocked this else branch should raise exception
-        pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
+        # pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
         # raise FileNotFoundError(f'Folder path argument is not set: {folder_path}.')
-        # pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/Provisional_State_of_the_Climate_2022_en.pdf']
+        pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/ESOTC-2024-report.pdf']
 
-    db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
+    if collection_name == '':
+        db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
+    else:
+        db_repository.collection_name = collection_name
     db_repository.connect_and_create_collection(delete_collection)
 
     metadata_extractor = build_extractor_graph()
 
+    use_semantic_chunking = True,
+    if use_recursive_chunking:
+        use_semantic_chunking = False
+
     for file in pdf_files:
         start_time = time.time()
 
-        obj = DroughEtl(
-                filepath=file,
-                db_repositories={'qdrant': db_repository},
-                embedding_service=embedding_service,
-                metadata_extractor=metadata_extractor
-            )
+        obj = DroughtEtl(
+            filepath=file,
+            db_repositories={'qdrant': db_repository},
+            embedding_service=embedding_service,
+            metadata_extractor=metadata_extractor,
+            use_semantic=use_semantic_chunking
+        )
         status = obj.run()
 
         end_time = time.time()
@@ -100,7 +114,6 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
             break
 
         result = rag.chat(question)
-        print(f'Assistant: {result['response']}')
         print('//////////////////////////////////')
         for index, source in enumerate(result['sources']):
             print(f'--- Source {index}: ---')
@@ -108,6 +121,8 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
             print(f' Source Text: {source.text}')
             print(f'-----------------------')
         print('//////////////////////////////////')
+        print(f'Assistant: {result['response']}')
+        print('----------------------------------')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='RAG app')
@@ -127,6 +142,19 @@ def parse_args():
     )
 
     parser.add_argument(
+        '--collection-name',
+        type=str,
+        default='',
+        help='Name of the Qdrant collection'
+    )
+
+    parser.add_argument(
+        '--recursive-chunking',
+        action='store_true',
+        help='Whether to use recursive chunking'
+    )
+
+    parser.add_argument(
         '--path',
         type=str,
         default='',
@@ -140,7 +168,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        '--erase-db',
+        '--erase',
         action='store_true',
         help='If to erase database before starting ETL'
     )
@@ -168,10 +196,16 @@ def main():
             'distance': str(os.environ.get("VECTOR_DB_DISTANCE", "DOT"))
         }
     )
-    llm_handler = LLMHandler(ip='localhost', port=11434)
 
     if args.run_etl:
-        run_etl_drough(args.path, args.erase_db, embedding_service, db_repository, llm_handler)
+        run_etl_drough(
+            path=args.path, 
+            delete_collection=args.erase, 
+            embedding_service=embedding_service, 
+            db_repository=db_repository, 
+            collection_name=args.collection_name,
+            use_recursive_chunking=args.recursive_chunking
+        )
         
     elif args.check_dbs:
         check_databases(db_repository)

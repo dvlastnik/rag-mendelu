@@ -10,11 +10,7 @@ class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     extracted_data: List[ExtractionScheme]
     intent: Intent | None
-    original_query: str
-    candidate_query: str
-    feedback: Optional[str]
-    retry_count: int
-    final_query: str
+    rewritten_query: str
     search_results: Annotated[list, operator.add]
     filtered_results: List[str]
     hallucination_status: str

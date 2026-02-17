@@ -24,33 +24,42 @@ class RagNodes:
         self.embedding_service = embedding_service
         self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2')
         
+    def _validate_metadata_field(self, value: str, field_name: str) -> str | None:
+        """
+        Helper method to validate and optionally fuzzy-match a metadata field value.
+        
+        Args:
+            value: The value to validate (e.g., 'pakistan', 'wmo')
+            field_name: The field name in Qdrant (e.g., 'locations', 'entities')
+            
+        Returns:
+            Validated (possibly fuzzy-matched) value, or None if not found
+        """
+        if not value:
+            return None
+            
+        if field_name == 'locations' and value.lower() == 'global':
+            return None
+            
+        validated = self.db_repository.validate_filter(value.lower(), field_name)
+        if not validated:
+            logger.warning(f"{field_name.title()} '{value}' not found in database")
+        return validated
+    
     def query_rewriter_agent(self, state: AgentState):
         logger.info("--- QUERY REWRITER ---")
     
-        original_query = state.get('original_query') or state['messages'][-1].content
-        feedback = state.get('feedback')
-        retry_count = state.get('retry_count', 0)
-
-        user_msg_content = f"Input Query: \"{original_query}\""
+        original_query = state['messages'][-1].content
         
-        if feedback:
-            user_msg_content += f"\n\nPREVIOUS ATTEMPT FAILED:\nCritique: {feedback}\n\nTask: Rewrite the query again, fixing the issues mentioned above."
-
-        print(f'user msg content: {user_msg_content}')
         response = self.llm.invoke([
             SystemMessage(content=Prompts.get_query_rewriter_agent_prompt()),
-            HumanMessage(content=user_msg_content)
+            HumanMessage(content=f'Input Query: "{original_query}"')
         ])
         
-        new_candidate = response.content.strip()
-        
-        logger.info(f"Draft #{retry_count + 1}: {new_candidate}")
+        rewritten_query = response.content.strip()
+        logger.info(f"Rewritten: {rewritten_query}")
 
-        return {
-            "original_query": original_query,
-            "candidate_query": new_candidate,
-            "retry_count": retry_count + 1
-        }
+        return {"rewritten_query": rewritten_query}
     
     def query_verifier_agent(self, state: AgentState):
         logger.info('--- QUERY VERIFIER ---')
@@ -98,14 +107,11 @@ class RagNodes:
         logger.info("--- EXTRACTING TARGETS ---")
         query = state['messages'][-1].content
         valid_data = self.db_repository.valid_metadata
-        valid_years = [str(y) for y in valid_data['years']]
-        valid_locations = valid_data['locations']
-
-        system_prompt = Prompts.get_extractor_agent_prompt()
+        valid_years = valid_data['years']
         
         extractor = self.llm.with_structured_output(MultiExtraction)
         result = extractor.invoke([
-            SystemMessage(content=system_prompt),
+            SystemMessage(content=Prompts.get_extractor_agent_prompt()),
             HumanMessage(content=query)
         ])
         
@@ -113,100 +119,36 @@ class RagNodes:
         final_targets = []
         for item in raw_extraction.targets:
             if item.year:
-                if str(item.year) in valid_years:
+                if item.year in valid_years:
                     pass
                 else:
                     logger.warning(f'Dropping invalid year: {item.year}')
                     item.year = None
 
-            item.location = item.location.lower()
             if item.location:
-                if item.location == 'global':
-                    item.location = None
-                elif item.location in valid_locations:
-                    pass
-                else:
-                    matches = difflib.get_close_matches(item.location, valid_locations, n=1, cutoff=0.6)
-                    print(f'matches: {matches}')
-                    if matches:
-                        logger.info(f"Fuzzy Match: '{item.location}' mapped to '{matches[0]}'")
-                        item.location = matches[0]
-                    else:
-                        logger.warning(f"No match found for location: '{item.location}'")
-                        item.location = None
+                item.location = self._validate_metadata_field(item.location, 'locations')
+            
+            if item.entities:
+                validated_entities = []
+                for entity in item.entities:
+                    validated = self._validate_metadata_field(entity, 'entities')
+                    if validated:
+                        validated_entities.append(validated)
+                item.entities = validated_entities if validated_entities else None
             
             final_targets.append(item)
 
         logger.info(f"Final Targets: {final_targets}")
         return {'extracted_data': final_targets}
     
-    def research_worker_v2(self, state: WorkerState):
-        target = state.get('target')
-        search_text = state.get('query')
-        logger.info(f"--- WORKER SEARCHING: {target} ---")
-
-        expanded_query = search_text
-        if target.topics:
-            topics_str = ', '.join(target.topics)
-            expanded_query = f'{expanded_query} {topics_str}'
-        
-        logger.info(f'Expanded query: {expanded_query}')
-        try:
-            response_list = self.embedding_service.get_embedding_with_uuid(data=expanded_query)
-            if not response_list:
-                return {'search_results': [f"Error: Could not generate embeddings for query."]}
-                
-            query_data = response_list[0]
-            dense_vec = query_data.embedding
-            sparse_vec = query_data.sparse
-            
-        except Exception as e:
-            logger.info(f"Worker Embedding Error: {e}")
-            return {'search_results': []}
-        
-        strategies = self._get_strategies(target)
-        raw_docs = []
-        for strategy in strategies:
-            logger.info(f"Trying Strategy: {strategy['name']}")
-            db_result = self.db_repository.search(
-                text_embedded=dense_vec,
-                sparse_embedded=sparse_vec,
-                filter_dict=strategy["filter"],
-                n_results=50 
-            )
-
-            if db_result.success and len(db_result.data) > 0:
-                raw_docs = db_result.data
-                logger.info(f"✅ Found {len(raw_docs)} docs using {strategy['name']}")
-                break
-        
-        if not raw_docs:
-            return {'search_results': [f"No data found for {target}."]}
-        
-        logger.info('--- RERANKING CANDIDATES ---')
-        passages = [
-            {'id': doc.id, 'text': doc.text, 'meta': doc.metadata} 
-            for doc in raw_docs
-        ]
-        rerank_request = RerankRequest(query=expanded_query, passages=passages)
-        results = self.reranker.rerank(rerank_request)
-
-        final_docs = [MyDocument.from_dict(r) for r in results[:20]]
-        return {'search_results': final_docs}
-
     def research_worker(self, state: WorkerState):
         target = state.get('target')
         search_text = state.get('query')
-        logger.info(f"--- WORKER SEARCHING: {target} ---")
-
-        expanded_query = search_text
-        if target.topics:
-            topics_str = ', '.join(target.topics)
-            expanded_query = f'{expanded_query} {topics_str}'
+        logger.info(f"--- WORKER SEARCHING: {target}, {search_text} ---")
         
-        logger.info(f'Expanded query: {expanded_query}')
+        logger.info(f'Search query: {search_text}')
         try:
-            response_list = self.embedding_service.get_embedding_with_uuid(data=expanded_query)
+            response_list = self.embedding_service.get_embedding_with_uuid(data=search_text)
             if not response_list:
                 return {'search_results': [f"Error: Could not generate embeddings for query."]}
                 
@@ -218,47 +160,14 @@ class RagNodes:
             logger.info(f"Worker Embedding Error: {e}")
             return {'search_results': []}
         
-        # search_filters = {}
-        # if target.location:
-        #     search_filters['locations'] = [target.location.lower()]
-        # if target.year:
-        #     search_filters['years'] = [target.year]
-
-        # db_result = self.db_repository.search(
-        #     text_embedded=dense_vec,
-        #     sparse_embedded=sparse_vec,
-        #     filter_dict=search_filters,
-        #     n_results=10
-        # )
-
-        # found_docs = []
-        # if db_result.success and len(db_result.data) > 0:
-        #     found_docs = [doc for doc in db_result.data]
-        # else:
-        #     logger.warning(f"Search failed for strict filters: {search_filters}")
-            
-        #     broad_result = self.db_repository.search(
-        #         text_embedded=dense_vec,
-        #         sparse_embedded=sparse_vec,
-        #         n_results=5
-        #     )
-            
-        #     if broad_result.data:
-        #         warning_header = f"""
-        #         [SYSTEM WARNING]: Exact matches for {search_filters} were NOT found. 
-        #         The following information is semantically relevant but might be from different years or locations.
-        #         Verify dates carefully.
-        #         """
-        #         found_docs = [MyDocument(id='warning', text=warning_header)] + [doc for doc in broad_result.data]
-        #         print(found_docs)
-
-        # if not found_docs:
-        #     return {'search_results': [f"No data found."]}
         strategies = self._get_strategies(target)
         raw_docs = []
+        used_strategy = None
+        
         for strategy in strategies:
             logger.info(f"Trying Strategy: {strategy['name']}")
             db_result = self.db_repository.search(
+                text=search_text,
                 text_embedded=dense_vec,
                 sparse_embedded=sparse_vec,
                 filter_dict=strategy['filter'],
@@ -267,27 +176,36 @@ class RagNodes:
 
             if db_result.success and len(db_result.data) > 0:
                 raw_docs = db_result.data
+                used_strategy = strategy
                 logger.info(f"✅ Found {len(raw_docs)} docs using {strategy['name']}")
                 break
         
         if not raw_docs:
-            return {'search_results': [f"No data found for {target}."]}
+            return {'search_results': []}
+        
+        if used_strategy and used_strategy['name'] == 'Pure Vector Search' and (target.year or target.location):
+            warning_doc = MyDocument(
+                id='filter_warning',
+                text=f"⚠️ WARNING: No exact matches found for the specified filters (Year: {target.year}, Location: {target.location}). The following results are based on semantic similarity and may be from different years or locations. Please verify the context carefully.",
+                metadata={'source': 'system_warning'}
+            )
+            raw_docs = [warning_doc] + raw_docs
             
         return {'search_results': raw_docs}
     
     def retrieval_grader_agent(self, state: AgentState):
         logger.info("--- GRADING RETRIEVED DOCS ---")
-        question = state.get('query')
+        original_question = state['messages'][-1].content
         raw_documents = state.get('search_results')
         if len(raw_documents) == 0:
             return {'filtered_results': []}
 
+        # Deduplicate by document ID
         unique_docs = []
-        seen_hashes = set()
+        seen_ids = set()
         for doc in raw_documents:
-            doc_hash = hash(doc.text.strip()) 
-            if doc_hash not in seen_hashes:
-                seen_hashes.add(doc_hash)
+            if doc.id not in seen_ids:
+                seen_ids.add(doc.id)
                 unique_docs.append(doc)
 
         doc_texts = []
@@ -300,7 +218,7 @@ class RagNodes:
         try:
             grade_result = grader_llm.invoke([
                 SystemMessage(content=Prompts.get_retrieval_grader_agent_prompt()),
-                HumanMessage(content=f"User Question: {question}\n\nCandidate Documents:\n{context_block}")
+                HumanMessage(content=f"User Question: {original_question}\n\nCandidate Documents:\n{context_block}")
             ])
             
             result = cast(GradeDocumentsBatch, grade_result)
@@ -388,10 +306,13 @@ class RagNodes:
     @staticmethod
     def validate_and_map(state: AgentState) -> Literal[NodeName.RESEARCH_WORKER, NodeName.ERROR]:
         data = state.get('extracted_data', [])
-        query = state.get('final_query') or state.get(f'original_query')
+        query = state.get('rewritten_query') or state['messages'][-1].content
         
         if not data:
-            return NodeName.ERROR
+            dummy_target = ExtractionScheme(location=None, year=None, entities=None)
+            return [
+                Send(NodeName.RESEARCH_WORKER, {'target': dummy_target, 'query': query})
+            ]
 
         return [
             Send(NodeName.RESEARCH_WORKER, {'target': t, 'query': query}) 
@@ -400,39 +321,37 @@ class RagNodes:
     
     @staticmethod
     def route_hallucination(state: AgentState) -> Literal[NodeName.SYNTHESIZER, END]: # type: ignore
-        MAX_RETRIES = 3
+        MAX_RETRIES = 2
         status = state.get('hallucination_status')
         retries = state.get("hallucination_retries", 0)
 
         if status == 'hallucinated':
             if retries >= MAX_RETRIES:
-                logger.warning(f"Max retries ({MAX_RETRIES}) reached. Stopping infinite loop.")
+                logger.warning(f"Max retries ({MAX_RETRIES}) reached. Returning error message.")
+                # Replace the hallucinated message with error message
+                state['messages'][-1] = AIMessage(
+                    content="I couldn't generate a reliable answer from the available data. The information in the database may not fully address your question. Please try rephrasing or asking about a different aspect."
+                )
                 return END 
             
             return NodeName.SYNTHESIZER
         return END
     
-    @staticmethod
-    def should_retry(state: AgentState) -> str:
-        feedback = state.get('feedback')
-        retry_count = state.get('retry_count', 0)
-        MAX_RETRIES = 3
-
-        if feedback is None:
-            return NodeName.EXTRACTOR
-        
-        if retry_count < MAX_RETRIES:
-            return NodeName.QUERY_REWRITER
-        
-        return NodeName.EXTRACTOR
-    
     def _get_strategies(self, target: ExtractionScheme) -> Dict:
         valid_year = self.db_repository.validate_filter(target.year, 'years')
         valid_location = self.db_repository.validate_filter(target.location, 'locations')
+        valid_entities = None
+        if target.entities:
+            
+            for entity in target.entities:
+                if self.db_repository.validate_filter(entity, 'entities'):
+                    valid_entities = target.entities
+                    break
 
         strategies = []
         strict_filter = {}
         name_parts = []
+        
         if valid_location:
             strict_filter['locations'] = [valid_location]
             name_parts.append("Location")
@@ -440,11 +359,15 @@ class RagNodes:
         if valid_year:
             strict_filter['years'] = [valid_year]
             name_parts.append("Year")
+        
+        if valid_entities:
+            strict_filter['entities'] = valid_entities
+            name_parts.append("Entities")
             
         if strict_filter:
             strategies.append({
                 "filter": strict_filter,
-                "name": f"Smart Strict ({' + '.join(name_parts)})"
+                "name": f"Strict ({' + '.join(name_parts)})"
             })
         
 

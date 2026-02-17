@@ -1,0 +1,212 @@
+[
+  {
+    "id": 1,
+    "question": "What was the warmest year on record according to the report?",
+    "response": "2023 was the warmest year on record, with a global mean near-surface temperature of 1.45 ± 0.12 °C above the 1850-1900 average.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 2,
+    "question": "Which three main greenhouse gases reached record-high observed levels in 2022?",
+    "response": "The three main greenhouse gases are carbon dioxide (CO2), methane (CH4), and nitrous oxide (N2O).",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 3,
+    "question": "What percentage of the Earth's surface is covered by the ocean?",
+    "response": "The ocean covers about 70% of the Earth's surface.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 4,
+    "question": "In which month of 2023 did Antarctic sea-ice extent reach an absolute record low?",
+    "response": "Antarctic sea-ice extent reached an absolute record low in February 2023.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 5,
+    "question": "What was the total amount of renewable capacity additions in 2023?",
+    "response": "Renewable capacity additions in 2023 totaled 510 GW, which was an increase of almost 50% compared with 2022.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 6,
+    "question": "Which specific month in 2023 was the warmest month ever recorded globally?",
+    "response": "July 2023 became the warmest month on record.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 7,
+    "question": "What is the goal of the 'Early Warnings for All' initiative?",
+    "response": "The goal is to ensure that everyone on Earth is protected from hazardous weather, water, or climate events through life-saving early warning systems by the end of 2027.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 8,
+    "question": "How much ice volume did Swiss glaciers lose over the past two years (2022-2023)?",
+    "response": "Swiss glaciers lost about 10% of their remaining volume in the past two years.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 9,
+    "question": "Which hurricane caused an estimated USD 12 billion in economic losses in Mexico in 2023?",
+    "response": "Hurricane Otis, which hit the Pacific coast of Mexico in late October 2023.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 10,
+    "question": "What was the concentration of Carbon Dioxide (CO2) in the atmosphere in 2022?",
+    "response": "The globally averaged concentration of CO2 in 2022 was 417.9 ± 0.2 parts per million (ppm).",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 11,
+    "question": "Compare the rate of sea-level rise between 1993-2002 and 2014-2023.",
+    "response": "The rate of sea-level rise more than doubled, increasing from 2.13 mm per year in the 1993-2002 period to 4.77 mm per year in the 2014-2023 period.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 12,
+    "question": "How does the report define a 'marine heatwave'?",
+    "response": "A marine heatwave is categorized as 'moderate' when the sea-surface temperature is above the 90th percentile of the climatological distribution for five days or longer.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 13,
+    "question": "What were the primary drivers of the record ice loss in glaciers during the 2022-2023 hydrological year?",
+    "response": "The loss was driven by extremely negative mass balance in both western North America and Europe, caused by low snowpacks, warm summers, and wildfire activity/darkening of glacier surfaces.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 14,
+    "question": "How did the 2023 wildfire season in Canada compare to the previous record total?",
+    "response": "The 2023 season saw 14.9 million hectares burned, which is more than double the previous record of 6.7 million hectares set in 1989 and seven times the long-term average.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 15,
+    "question": "Explain the relationship between the Indian Ocean Dipole (IOD) and rainfall in the Horn of Africa in late 2023.",
+    "response": "A positive IOD developed in 2023, which led to much higher than normal rainfall in the Horn of Africa during the October-December season, resulting in flooding in Ethiopia, Kenya, and Somalia.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 16,
+    "question": "What is the estimated annual climate finance investment needed for a 1.5 °C pathway by 2030?",
+    "response": "Annual climate finance investments need to reach almost USD 9 trillion by 2030, and USD 10 trillion through 2050.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 17,
+    "question": "Why was the 2023 Antarctic ozone hole unusually long-lived?",
+    "response": "Its longevity was due to below-average stratospheric temperatures and a strong polar vortex lasting until December, potentially influenced by water vapor from the Hunga Tonga-Hunga Ha'apai eruption.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 18,
+    "question": "Which geographical regions received 90% of the increase in global climate finance in 2021-2022?",
+    "response": "China, Brazil, Europe, India, Japan, and the United States of America.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 19,
+    "question": "How many people were estimated to be acutely food insecure in 2023 compared to before the COVID-19 pandemic?",
+    "response": "The number more than doubled, from 149 million people before the pandemic to 333 million people in 2023 across 78 monitored countries.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 20,
+    "question": "What was the estimated total mass balance of the Greenland ice sheet for the 2022-2023 period?",
+    "response": "The estimated total mass balance was about -217 Gt, resulting from a surface mass balance of +317 Gt, a basal mass balance of -27 Gt, and a marine mass balance of -504 Gt.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 21,
+    "question": "Detail the methodology used to calculate global mean temperature anomalies relative to the 1850-1900 baseline.",
+    "response": "The report combines the IPCC assessment of change between 1850-1900 and 1981-2010 (0.69 °C) with estimated changes between 1981-2010 and the current year from six different datasets, then calculates the mean and standard deviation of these estimates.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 22,
+    "question": "What is the 'cost of inaction' regarding climate change as estimated for the period 2025-2100?",
+    "response": "The total cost of inaction is estimated at USD 1,266 trillion, which is the difference in losses between a business-as-usual (3 °C) scenario and a 1.5 °C pathway.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 23,
+    "question": "Describe the contrasting heat trends in the North Atlantic and their scientific associations.",
+    "response": "The North Atlantic shows a pattern of cooling in the subpolar region (50° N-70° N) and warming in the mid-latitudes (20° N-50° N). This has been associated with a slowing of the Atlantic Meridional Overturning Circulation (AMOC) and local air-sea interactions.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 24,
+    "question": "According to the report, why are greenhouse gas growth rates typically lower in years starting with La Niña?",
+    "response": "The report notes that CO2 growth rates are typically lower in La Niña years (like 2022) and higher in El Niño years (like 2016) because the climate phase affects the balance of natural sources and sinks, though specific biological mechanisms are not detailed in this text.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 25,
+    "question": "What role did the North Atlantic Oscillation (NAO) play in Greenland's climate during 2023?",
+    "response": "High pressure associated with a negative NAO in late June and July 2023 contributed to a heatwave that caused significant snowmelt and ice melt across southern Greenland.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 26,
+    "question": "Explain the difference in ocean heat accumulation rates between the 1971-2023 period and the 2005-2023 period.",
+    "response": "The rate of warming for the 0-2000 m layer was 0.7 ± 0.1 W m-2 from 1971 to 2023, but increased to 1.0 ± 0.1 W m-2 from 2005 to 2023, showing a strong acceleration in the past two decades.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 27,
+    "question": "How did Storm Daniel impact the agrifood value chain in Libya specifically?",
+    "response": "It flooded nearly 3,000 hectares of cropland, destroyed the irrigation system via dam collapses in Derna, damaged roads, affected cereal storage, and disrupted overall market channels in a country already in a food crisis.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 28,
+    "question": "Which specific energy indicators are used in the report to illustrate the nexus between climate variability and renewable energy in Southern Africa?",
+    "response": "Capacity factors for wind power and solar photovoltaic power, weighted total precipitation (as a proxy for hydropower), and energy degree days (as a proxy for energy demand).",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 29,
+    "question": "What are the three components that sum to the total mass balance of an ice sheet?",
+    "response": "Surface mass balance (snow accumulation minus meltwater runoff), marine mass balance (mass loss from calving icebergs and melting in contact with the ocean), and basal mass balance (melting at the bed due to geothermal heat and friction).",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 30,
+    "question": "According to SDG Indicator 14.3.1, what is the status of global ocean acidification monitoring?",
+    "response": "Current coverage is inadequate; many regions remain under-sampled, and available time series are often not long enough to determine definitive trends or fill gaps in observations.",
+    "source": "1347_Global-statement-2023_en.md",
+    "difficulty": "hard"
+  }
+]

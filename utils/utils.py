@@ -25,7 +25,7 @@ class Utils:
         return safe_name
 
     @staticmethod
-    def _get_output_path(path: pathlib.Path, output_folder: str = None, file_type: str = "md") -> pathlib.Path:
+    def get_output_path(path: pathlib.Path, output_folder: str = None, file_type: str = "md") -> pathlib.Path:
         safe_name = Utils._get_safe_name_of_document(path=path)
 
         if output_folder is None or output_folder == "":
@@ -191,7 +191,7 @@ class Utils:
             logger.warning(f"Skipping non-PDF file: {path.name}")
             return
         
-        output_path = Utils._get_output_path(path=path, output_folder=output_folder, file_type="md")
+        output_path = Utils.get_output_path(path=path, output_folder=output_folder, file_type="md")
 
         if output_path.exists() and output_path.is_file():
             logger.info(f"File already exists! Path: {output_path}")

@@ -37,7 +37,7 @@ def judge():
     return Judge()
 
 @pytest.fixture(scope="session", autouse=True)
-def evaluation_logger(model_name):
+def evaluation_logger(model_name, questions_file):
     """
     This fixture runs once per session.
     It waits for all tests to finish, then saves 'session_results' to a file.
@@ -45,9 +45,11 @@ def evaluation_logger(model_name):
     yield
     
     if session_results:
-        output_dir = get_results_filepath(model_name)
+        output_dir = get_results_filepath(model_name, questions_file)
         os.makedirs(output_dir, exist_ok=True)
         
+        if '/' in model_name:
+            model_name = model_name.replace('/', '_')
         output_path = os.path.join(output_dir, f'judgement_report_{model_name}.json')
         answers_path = os.path.join(output_dir, 'answers.json')
 
@@ -87,26 +89,31 @@ def test_rag_quality(data, judge):
         ground_truth=data['ground_truth']
     )
     
+    pass_str = 'PASSED'
+    fail_str = 'FAILED'
+    status_str = fail_str
+    if eval_result.relevancy_score >= 4 and eval_result.faithfulness_score == 5:
+        status_str = 'PASSED'
+
     log_entry = {
         'id': data['id'],
         'question': data['question'],
         'answer': data['generated_answer'],
         'extracted_data': data['extracted_data'],
+        'retrieved_sources': data['retrieved_sources'],
         'rewritten_query': data['rewritten_query'],
-        'expanded_queries': data['expanded_queries'],
         'true_answer': data['ground_truth'],
         'scores': {
             'relevancy': eval_result.relevancy_score,
             'faithfulness': eval_result.faithfulness_score
         },
-        'pass_fail': eval_result.pass_fail,
         'reasoning': eval_result.reasoning,
-        'status': "PASSED" if eval_result.pass_fail else "FAILED"
+        'status': status_str
     }
     session_results.append(log_entry)
 
-    print(f"\n[ID {data['id']}] Pass: {eval_result.pass_fail} | Rel: {eval_result.relevancy_score} | Faith: {eval_result.faithfulness_score}")
+    print(f"\n[ID {data['id']}] Status: {status_str} | Rel: {eval_result.relevancy_score} | Faith: {eval_result.faithfulness_score}")
     print(f"Reason: {eval_result.reasoning}")
 
     error_msg = f"Judge Failed this answer. Reason: {eval_result.reasoning}"
-    assert eval_result.pass_fail is True, error_msg
+    assert status_str is pass_str, error_msg

@@ -43,6 +43,9 @@ class AgenticRAG:
 
             return {
                 'agent_state': final_state,
+                'original_query': question,
+                'rewritten_query': final_state['rewritten_query'],
+                'extracted_data': final_state['extracted_data'],
                 'response': last_message.content,
                 'sources': final_state['filtered_results']
             }
@@ -50,4 +53,8 @@ class AgenticRAG:
         except Exception as e:
             traceback.print_exc()
             logger.error(f"Agent Workflow Failed: {e}")
-            return f"I encountered an error while processing your request: {str(e)}"
+            return {
+                'agent_state': initial_state,
+                'response': f"I encountered an error while processing your request: {str(e)}",
+                'sources': []
+            }

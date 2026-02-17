@@ -45,73 +45,31 @@ class Prompts:
         Input: "tropical nights in Europe"
         Output: Europe tropical nights temperature >20C heat stress
         """
-
-    @staticmethod
-    def get_query_verifier_prompt() -> str:
-       return """You are a Search Logic Validator. 
-        
-        **Goal:** Decide if the Rewritten Query is safe for a Search Engine.
-        
-        **The Golden Rule:** - Vector Databases PREFER keywords over grammar. 
-        - "Europe flood 2024" is BETTER than "What happened in Europe?"
-        
-        **PASS Conditions (Output 'PASS'):**
-        1. The Core Entities are present (e.g., 'Europe', '2024').
-        2. The Core Subject is present (e.g., 'Flood', 'Inundation').
-        3. Synonyms are acceptable (e.g., 'Significant' -> 'Severe' or 'Major' is OK).
-        4. Grammar is broken (e.g., "Flood Europe 2024" is a PASS).
-
-        **FAIL Conditions (Output 'FAIL'):**
-        1. CRITICAL: The Year or Location was changed (e.g., 2024 -> 2023).
-        2. CRITICAL: The meaning is inverted (e.g., Flood -> Drought).
-        3. CRITICAL: The user asked for "Countries" but the rewrite removed that intent completely.
-
-        **Output Format:**
-        REASONING: <Brief comparison of entities>
-        DECISION: <PASS or FAIL>
-        """
     
     @staticmethod
     def get_extractor_agent_prompt() -> str:
-        return """You are a Metadata Extraction Specialist.
-        
-        **Task:** Extract specific search filters from the user query.
-        
-        **CRITICAL RULES:**
-        1. **Titles are NOT Protected:** You must extract Years and Locations even if they are part of a document title (e.g., "State of the Global Climate 2023").
-        2. **Year Format:** Return the Year as an **INTEGER** (e.g., 2023), NOT a string.
-        3. **Location:** Extract countries, regions, or "Global".
-        
+        return """Extract metadata filters from climate queries.
+
+        **Extract:**
+        - **Years:** Any 4-digit number (e.g., 2023, 2024). Return as INTEGER.
+        - **Locations:** Countries, regions, or cities (e.g., Pakistan, East Africa). Use "Global" for worldwide queries.
+        - **Entities:** Climate organizations mentioned (WMO, IPCC, NASA, NOAA, FAO, UN, ESA).
+
+        **Rules:**
+        1. Extract years even from titles ("Climate 2023 report" → year: 2023)
+        2. "Global" or "worldwide" → location: "Global"
+        3. If no filters found, return empty values
+
         **Examples:**
-        
+
         User: "WMO State of the Global Climate 2023 report"
-        Output:
-        {
-          "targets": [
-            {
-              "location": "Global",
-              "year": 2023,
-              "topics": ["WMO", "State of the Climate", "report"]
-            }
-          ]
-        }
+        Output: {"targets": [{"location": "Global", "year": 2023, "entities": ["WMO"]}]}
 
         User: "Floods in Brazil and Peru 2024"
-        Output:
-        {
-          "targets": [
-            {
-              "location": "Brazil",
-              "year": 2024,
-              "topics": ["Floods", "rainfall"]
-            },
-            {
-              "location": "Peru",
-              "year": 2024,
-              "topics": ["Floods", "rainfall"]
-            }
-          ]
-        }
+        Output: {"targets": [{"location": "Brazil", "year": 2024, "entities": []}, {"location": "Peru", "year": 2024, "entities": []}]}
+
+        User: "What does NASA report about Antarctic ice loss?"
+        Output: {"targets": [{"location": "Antarctic", "year": null, "entities": ["NASA"]}]}
         """
     
     @staticmethod
@@ -140,14 +98,19 @@ class Prompts:
     
     @staticmethod
     def get_synthesizer_agent_prompt() -> str:
-        return """You are a Senior Synthesizer Agent. 
-        Your task is to answer the user's question using ONLY the provided retrieved context.
+        return """You are an expert, highly precise Q&A assistant. Your task is to answer the user's question using ONLY the provided database context.
 
-        CRITICAL INSTRUCTIONS:
-        1. **GROUNDING**: Answer using ONLY the text provided in the Context block. Do not use outside knowledge.
-        2. **COMPARISONS**: If the user asks to compare, explicitly contrast data points (e.g., "While Item A has X, Item B has Y").
-        3. **STYLE**: Start directly with the facts. NEVER say "Based on the search results" or "Here is the answer".
-        4. **HONESTY**: If the context does not contain the answer, simply state that you do not know. Do not guess.
+        **CRITICAL RULES:**
+        1. **NO SUMMARIES:** DO NOT summarize the documents. DO NOT say "Here are some key points".
+        2. **DIRECT ANSWER ONLY:** Answer exactly what the user asked and nothing else. If they ask for temperature, do not mention CO2, methane, or sea levels.
+        3. **PRECISION:** Pay strict attention to numbers and units. Do not confuse millimeters (mm) with degrees (°C). 
+        4. **GROUNDING:** If the specific answer to the question is NOT in the context, output EXACTLY: "I cannot find the specific information in the database to answer your question." Do not attempt to guess.
+
+        **Example of BAD Response:**
+        "The report covers the climate in 2022. The temperature anomaly was 1.14°C. The report also mentions CO2 levels reached 415 ppm and sea levels rose 3.4mm."
+        
+        **Example of GOOD Response:**
+        "According to the 2022 report, the 10-year average global temperature anomaly (2013-2022) is estimated to be 1.14 °C above the 1850-1900 pre-industrial average."
         """
     
     @staticmethod

@@ -6,7 +6,7 @@ from rag.agents.enums import Intent
 class ExtractionScheme(BaseModel):
     location: str | None
     year: int | None
-    topics: List[str]
+    entities: List[str] | None
 
 class GeneralOrRagDecision(BaseModel):
     intent: Intent = Field(

@@ -154,7 +154,7 @@ class TextEmbeddingService:
         else:
             for i, chunk in enumerate(Utils.chunks(data, chunk_size)):
                 try:
-                    logger.info(f"{i}. chunk processed")
+                    logger.debug(f"{i}. chunk processed")
 
                     temp_arr = self._embed_text_and_return_result({
                         "texts": chunk

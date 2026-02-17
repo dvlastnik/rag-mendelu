@@ -1,6 +1,5 @@
 import traceback
-import httpx
-from typing import List, Tuple, Optional, Dict
+from typing import List, Optional, Dict
 from collections import Counter
 import pathlib
 import re
@@ -8,28 +7,111 @@ from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 from etl.BaseEtl import BaseEtl, ETLState
+from etl.table_extractor import TableProcessor
 from database.base.MyDocument import MyDocument, SparseVector
-from text_embedding_api.TextEmbeddingService import ChunkAndEmbedResponse
+from text_embedding_api.TextEmbeddingService import EmbeddingResponse
+from utils.Utils import Utils
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-MAX_SAFE_CHUNK_SIZE = 2000
+_RE_IMAGE_COMMENT = re.compile(r'<!-- image -->', re.IGNORECASE)
+_RE_FIGURE_SOURCE = re.compile(r'^\s*(Figure|Source:).*$', re.MULTILINE)
+_RE_URL = re.compile(r'https?://\S+')
+_RE_HYPHENATION = re.compile(r'(\w)-\n(\w)')
+_RE_STANDALONE_NUMBER = re.compile(r'^\s*\d+\s*$', re.MULTILINE)
+_RE_TRAILING_PAGE_NUM = re.compile(r'\. \d{1,3}(?=\s+[A-Z])')
+_RE_COMMA_PAGE_NUM = re.compile(r',\s\d{1,3}(?=\s)')
+_RE_SINGLE_NEWLINE = re.compile(r'(?<!\n)\n(?!\n)')
+_RE_MULTI_NEWLINE = re.compile(r'\n{2,}')
+_RE_CITATION = re.compile(r'\[[0-9]{1,3}\]')
+_RE_MULTI_SPACE = re.compile(r'\s+')
 
-class DroughEtl(BaseEtl):
-    def __init__(self, filepath, db_repositories, embedding_service, metadata_extractor):
+MIN_CHUNK_SIZE = 50
+METADATA_EXTRACTION_CONTEXT_SIZE = 3000
+MAX_CHUNK_SIZE_FOR_SEMANTIC_SEARCH = 3000
+
+class DroughtEtl(BaseEtl):
+    """
+    ETL pipeline for processing climate/drought-related markdown documents.
+    
+    Handles markdown ingestion, text cleaning, metadata extraction via LLM,
+    and embedding generation for vector database storage.
+    
+    Note: Currently optimized for drought/climate reports but designed to be
+    extensible for other document types in the future.
+    """
+    JUNK_TITLE_KEYWORDS = [
+        "contents",
+        "highlights",
+        "table of contents",
+        "contributors", 
+        "data sets and methods",
+        "author",
+        "credits",
+        "editors",
+        "citing this report",
+        "references",
+        "acknowledgements",
+        "executive summary"
+    ]
+    
+    def __init__(
+        self, 
+        filepath: pathlib.Path, 
+        db_repositories, 
+        embedding_service, 
+        metadata_extractor,
+        use_semantic: bool = True
+    ) -> None:
+        """
+        Initialize the DroughtEtl pipeline.
+        
+        Args:
+            filepath: Path to the markdown file to process.
+            db_repositories: Database repository instances for storage.
+            embedding_service: Service for generating text embeddings.
+            metadata_extractor: LLM-based metadata extraction graph/chain.
+            use_semantic: Whether to use semantic chunking (for text <= 2000 chars).
+        """
         super().__init__(filepath, db_repositories, embedding_service)
         self.metadata_extractor = metadata_extractor
+        self.table_processor = TableProcessor()
+        self.use_semantic = use_semantic
+        self.splitter = RecursiveCharacterTextSplitter(
+            chunk_size=512,
+            chunk_overlap=100,
+            length_function=len,
+            separators=["\n\n", "\n", ". ", " ", ""]
+        )
 
-    def _sanitize_string(self, s: str) -> str:
-        if not isinstance(s, str): 
-            return str(s)
-        return s.encode('utf-8', 'replace').decode('utf-8')
+    def _sanitize_string(self, s: Optional[str]) -> str:
+        """
+        Sanitize a string by removing null bytes and invalid unicode characters.
+        
+        Args:
+            s: Input string (can be None or non-string type).
+            
+        Returns:
+            Cleaned string with invalid characters removed.
+        """
+        if s is None:
+            return ""
+        if not isinstance(s, str):
+            s = str(s)
+        return s.replace('\x00', '').replace('\ufffd', '').strip()
 
-    def _row_to_document(self, row):
-        return super()._row_to_document(row)
-
-    def get_file_path(self, only_folder: bool = False, chunk_index: int | None = None) -> pathlib.Path:
+    def get_file_path(self, only_folder: bool = False, chunk_index: Optional[int] = None) -> pathlib.Path:
+        """
+        Generate output file path for processed chunks.
+        
+        Args:
+            only_folder: If True, return only the folder path.
+            chunk_index: Optional chunk index for individual chunk files.
+            
+        Returns:
+            Path object for the output location.
+        """
         folder_prefix = "data/ignore_"
 
         if only_folder:
@@ -37,72 +119,116 @@ class DroughEtl(BaseEtl):
         if chunk_index is not None:
             return pathlib.Path(f"{folder_prefix}{self.file.stem}/{self.file.stem}_{chunk_index}.md")
         return pathlib.Path(f"{folder_prefix}{self.file.stem}/{self.file.stem}.md")
-
-    def _merge_body(self, body: str) -> str:
-        if "table" in body.lower() or "table of contents" not in body.lower():
-            return body
-        
-        lines = body.splitlines()
-        buffer = []
-
-        for line in lines:
-            line_stripped = line.strip()
-            if line_stripped != "":
-                buffer.append(line)
-
-        return " ".join(buffer)
     
-    def filter_unwanted_pages(self, documents: List[Document]) -> List[Document]:
-        logger.info(f"Length of documents before filtering: {len(documents)}")
+    def _filter_unwanted_sections(self, documents: List[Document]) -> List[Document]:
+        """
+        Filter out non-content sections like table of contents, contributors, etc.
+        
+        Uses title-based filtering only to avoid false positives from body text
+        containing keywords like "contents" (e.g., "ocean heat contents").
+        
+        Args:
+            documents: List of Document objects from markdown splitting.
+            
+        Returns:
+            Filtered list with junk sections removed.
+        """
+        logger.info(f"Sections before filtering: {len(documents)}")
         cleaned_docs = []
-        junk_keywords = ["contents", "contributors", "data sets and methods", "author", "table of contents", "credit", "editor", "cite", "citing", "references"]
         
         for doc in documents:
-            if doc.metadata.get("page") == 0:
-                continue
-                
-            page_text_lower = doc.page_content.lower()
-            titles = [title.lower() for title in doc.metadata['headers']]
-
-            text_has_junk = any(keyword in page_text_lower for keyword in junk_keywords)
-            title_has_junk = any(keyword in title for keyword in junk_keywords for title in titles)
+            headers = doc.metadata.get('headers', [])
+            header_text = ' '.join(headers).lower()
             
-            if text_has_junk or title_has_junk:
+            is_junk_section = any(
+                keyword in header_text 
+                for keyword in self.JUNK_TITLE_KEYWORDS
+            )
+
+            if not is_junk_section:
+                is_junk_section = '...............' in doc.page_content
+            
+            if is_junk_section:
+                logger.debug(f"Filtered section with headers: {headers}")
                 continue
                 
             cleaned_docs.append(doc)
 
-        logger.info(f"Length of documents after filtering: {len(cleaned_docs)}")
-            
+        logger.info(f"Sections after filtering: {len(cleaned_docs)}")
         return cleaned_docs
     
-    def clean_document_text(self, doc: Document) -> Document:
+    def _clean_document_text(self, doc: Document) -> Document:
         """
-        Cleans the page_content of a LangChain Document by fixing
-        PDF/Markdown extraction artifacts.
+        Clean the page_content of a Document by removing extraction artifacts.
+        
+        Handles:
+        - HTML/Markdown comments and image placeholders
+        - URLs and citation markers
+        - Hyphenated line breaks from PDF extraction
+        - Standalone page numbers
+        - Excessive whitespace
+        
+        Args:
+            doc: LangChain Document with raw extracted text.
+            
+        Returns:
+            New Document with cleaned page_content (metadata preserved).
         """
         text = doc.page_content
-        text = re.sub(r'', '', text, flags=re.DOTALL)
-        text = re.sub(r'<!-- image -->', '', text, flags=re.IGNORECASE)
-        text = text.replace('\x00', '')
-        text = re.sub(r'^\s*(Figure|Source:).*$', '', text, flags=re.MULTILINE)
-        text = re.sub(r'https?://\S+', '', text)
-        text = text.replace('\xa0', ' ')
-        text = re.sub(r'(\w)-\n(\w)', r'\1\2', text)
-        text = re.sub(r'^\s*\d+\s*$', '', text, flags=re.MULTILINE)
-        text = re.sub(r'\. \d{1,3}(?=\s+[A-Z])', '.', text) 
-        text = re.sub(r',\s\d{1,3}(?=\s)', ',', text)
-        text = re.sub(r'(?<!\n)\n(?!\n)', ' ', text)
-        text = re.sub(r'\n{2,}', '\n', text)
-        text = re.sub(r'\[[0-9]{1,3}\]', '', text) 
-        text = re.sub(r'\s+', ' ', text).strip()
+        
+        text = _RE_IMAGE_COMMENT.sub('', text)
+        text = text.replace('\x00', '').replace('\xa0', ' ')
+        text = _RE_HYPHENATION.sub(r'\1\2', text)
+        text = _RE_FIGURE_SOURCE.sub('', text)
+        text = _RE_URL.sub('', text)
+        text = _RE_STANDALONE_NUMBER.sub('', text)
+        text = _RE_TRAILING_PAGE_NUM.sub('.', text)
+        text = _RE_COMMA_PAGE_NUM.sub(',', text)
+        text = _RE_SINGLE_NEWLINE.sub(' ', text)
+        text = _RE_MULTI_NEWLINE.sub('\n', text)
+        text = _RE_CITATION.sub('', text)
+        text = _RE_MULTI_SPACE.sub(' ', text).strip()
         text = text.replace('\\', '')
         
         return Document(page_content=text, metadata=doc.metadata)
 
     def _load_and_split_markdown(self) -> List[Document]:
-        path_to_md = pathlib.Path(f"data/drough/{self.file.stem}.md")
-        md_text = path_to_md.read_text(encoding='utf-8')
+        """
+        Load markdown file, extract tables, and split by headers into Document sections.
+        
+        Tables are extracted first from the full document, then removed from the text
+        before splitting by headers. Table Documents are added to the result list.
+        
+        Each text Document contains:
+        - page_content: The text under that header
+        - metadata['headers']: List of header texts (hierarchical)
+        - metadata['header_path']: Full header hierarchy as string
+        - metadata['is_table']: False
+        
+        Each table Document contains:
+        - page_content: The table summary text
+        - metadata['is_table']: True
+        - metadata['table_rows'], ['table_columns'], ['table_headers'], etc.
+        
+        Returns:
+            List of Documents (both text sections and tables).
+            
+        Raises:
+            FileNotFoundError: If the markdown file doesn't exist.
+        """
+        output_md_file = Utils.get_output_path(self.file, 'data/drough')
+        md_text = output_md_file.read_text(encoding='utf-8')
+
+        logger.info(f"Extracting tables from '{self.file.name}' ({len(md_text):,} chars)...")
+        text_without_tables, table_documents = self.table_processor.process_document(
+            markdown_text=md_text,
+            base_metadata={'source': self.file.stem}
+        )
+        
+        if table_documents:
+            logger.info(f" - Extracted {len(table_documents)} tables from document")
+        else:
+            logger.info(f" - No tables found in '{self.file.name}'")
 
         headers_to_split_on = [
             ("#", "Header 1"),
@@ -110,17 +236,31 @@ class DroughEtl(BaseEtl):
             ("###", "Header 3"),
             ("####", "Header 4"),
         ]
-        md_splitter_obj = MarkdownHeaderTextSplitter(headers_to_split_on)
-        splitted_md = md_splitter_obj.split_text(md_text)
+        md_splitter = MarkdownHeaderTextSplitter(headers_to_split_on)
+        split_docs = md_splitter.split_text(text_without_tables)
 
-        for doc in splitted_md:
-            base_metadata = {'headers': []}
-            for key in doc.metadata.keys():
+        for doc in split_docs:
+            headers = []
+            for key in sorted(doc.metadata.keys()):
                 if "Header" in key:
-                    base_metadata['headers'].append(doc.metadata[key].lower())
-            doc.metadata = base_metadata
+                    headers.append(doc.metadata[key].lower())
+            doc.metadata = {
+                'headers': headers,
+                'header_path': ' > '.join(headers) if headers else '',
+                'is_table': False
+            }
 
-        return splitted_md
+        for table_doc in table_documents:
+            table_metadata = table_doc['metadata'].copy()
+            table_metadata['is_table'] = True
+            
+            doc = Document(
+                page_content=table_doc['text'],
+                metadata=table_metadata
+            )
+            split_docs.append(doc)
+
+        return split_docs
     
     def _merge_metadata_dicts(self, results: List[Dict]) -> Dict:
         """
@@ -155,60 +295,52 @@ class DroughEtl(BaseEtl):
     
     def _extract_section_metadata(self, text: str, existing_metadata: Dict) -> Dict:
         """
-        Extracts metadata by segmenting long text to fit smaller model context,
-        then aggregates the results.
+        Extracts metadata from the provided context (Section Header/Intro).
+        Performs ONE robust LLM call instead of multiple flaky ones.
         """
         try:
-            segment_size = 2000
-            overlap = 100
+            metadata_from_agent = self.metadata_extractor.invoke({'text_chunk': text})
+            clean_data = metadata_from_agent.get('clean_data', {})
+            new_years = clean_data.get('years', [])
+            new_locations = clean_data.get('locations', [])
+            new_entities = clean_data.get('entities', [])
+            has_numerical_data = clean_data.get('has_numerical_data', False)
             
-            if len(text) <= segment_size:
-                segments = [text]
+            final_metadata = existing_metadata.copy()
+            
+            if 'years' in final_metadata and isinstance(final_metadata['years'], list):
+                final_metadata['years'].extend(new_years)
             else:
-                segments = []
-                start = 0
-                while start < len(text):
-                    end = min(start + segment_size, len(text))
-                    segments.append(text[start:end])
-                    start += (segment_size - overlap)
+                final_metadata['years'] = new_years
 
-            extracted_objects = []
-            for i, segment in enumerate(segments):
-                try:
-                    metadata_from_agent = self.metadata_extractor.invoke({'text_chunk': segment})
-                    appending_metadata = {
-                        'years': metadata_from_agent['clean_data']['years'],
-                        'locations': metadata_from_agent['clean_data']['locations']
-                    }
-                    extracted_objects.append(appending_metadata)
-
-                except (TimeoutError, httpx.ReadTimeout, httpx.ConnectTimeout):
-                    logger.error(f"   [Segment {i+1}] OLLAMA TIMEOUT. Skipping segment.")
-                    break
-                except Exception as e:
-                    traceback.print_exc()
-                    logger.error(f"   [Segment {i+1}] General Error: {e}")
-                    continue
-
-            if not extracted_objects:
-                logger.warning("No metadata extracted from any segment.")
-                return existing_metadata
-
-            aggregated_data = self._merge_metadata_dicts(extracted_objects)
-            final_metadata = existing_metadata.copy() | aggregated_data
+            if 'locations' in final_metadata and isinstance(final_metadata['locations'], list):
+                final_metadata['locations'].extend(new_locations)
+            else:
+                final_metadata['locations'] = new_locations
             
+            if 'entities' in final_metadata and isinstance(final_metadata['entities'], list):
+                final_metadata['entities'].extend(new_entities)
+            else:
+                final_metadata['entities'] = new_entities
+            
+            final_metadata['has_numerical_data'] = final_metadata.get('has_numerical_data', False) or has_numerical_data
+
             processed_metadata = {}
             for key, value in final_metadata.items():
-                if value is None:
+                if value is None: 
                     continue
                 
                 if isinstance(value, str):
                     processed_metadata[key] = self._sanitize_string(value.lower())
                 elif isinstance(value, list):
-                    processed_metadata[key] = sorted(list(set([
-                        self._sanitize_string(item.lower()) if isinstance(item, str) else item
-                        for item in value
-                    ])))
+                    if key == 'years':
+                        processed_metadata[key] = sorted(list(set([int(item) for item in value if item])))
+                    else:
+                        processed_metadata[key] = sorted(list(set([
+                            self._sanitize_string(str(item).lower()) for item in value if item
+                        ])))
+                elif isinstance(value, bool):
+                    processed_metadata[key] = value
                 else:
                     processed_metadata[key] = value
             
@@ -219,24 +351,27 @@ class DroughEtl(BaseEtl):
             logger.error(f"LLM Metadata extraction failed: {e}")
             return existing_metadata
     
-    def _create_document_from_chunk(self, chunk: ChunkAndEmbedResponse, full_metadata: Dict) -> MyDocument | None:
-        if len(chunk.text) < 50:
+    def _create_document_from_chunk(self, embedding_data: EmbeddingResponse, text: str, full_metadata: Dict) -> MyDocument | None:
+        """
+        Creates a MyDocument object by combining the Text (from splitter) 
+        and the Vectors (from EmbeddingResponse).
+        """
+        if not text or len(text) < 50:
             return None
         
         try:
             chunk_metadata = full_metadata.copy()
-
-            sanitized_text = self._sanitize_string(chunk.text)
-            chunk_metadata['text'] = chunk.text
-
             sparse_vec = None
-            if chunk.sparse_embedding:
-                sparse_vec = SparseVector(chunk.sparse_embedding.indices, chunk.sparse_embedding.values)
+            if embedding_data.sparse:
+                sparse_vec = SparseVector(
+                    indices=embedding_data.sparse.indices, 
+                    values=embedding_data.sparse.values
+                )
 
             return MyDocument(
-                id=chunk.embed_text.uuid,
-                text=sanitized_text,
-                embedding=chunk.embed_text.embedding,
+                id=embedding_data.uuid,
+                text=text,
+                embedding=embedding_data.embedding,
                 sparse_embedding=sparse_vec,
                 metadata=chunk_metadata
             )
@@ -247,92 +382,191 @@ class DroughEtl(BaseEtl):
             return None
 
     def _process_document(self, text: str, base_metadata: Dict) -> List[MyDocument]:
-        if len(text) < 50:
+        """
+        Process a single document section: extract metadata, chunk, and embed.
+        
+        When use_semantic is True:
+        - Text <= 2000 chars: Send directly to semantic chunk_and_embed API
+        - Text > 2000 chars: Pre-split with recursive splitter, then send each chunk to semantic API
+        
+        When use_semantic is False:
+        - Use recursive splitter + get_embedding_with_uuid (traditional approach)
+        
+        Args:
+            text: The cleaned section text to process.
+            base_metadata: Metadata from the document (headers, parent_text, etc.)
+            
+        Returns:
+            List of MyDocument objects ready for database insertion.
+        """
+        if not text or len(text) < MIN_CHUNK_SIZE:
             return []
 
-        segments_to_process = [MyDocument(id='null', text=text, metadata=base_metadata.copy())]
-        if len(text) > MAX_SAFE_CHUNK_SIZE:
-            logger.warning(f"Text too large ({len(text)} chars). Pre-splitting locally.")
-            pre_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=MAX_SAFE_CHUNK_SIZE,
-                chunk_overlap=200,
-                separators=["\n\n", "\n", " ", ""]
-            )
-            raw_texts = pre_splitter.split_text(text)
-            
-            segments_to_process: List[MyDocument] = []
-            for t in raw_texts:
-                segments_to_process.append(MyDocument(id='null',text=t, metadata=base_metadata.copy()))
-            
-            logger.info(f' - Smaller chunks len: {len(segments_to_process)}')
-
         processed_final_docs = []
-        for i, segment in enumerate(segments_to_process):
-            current_text = segment.text
-            current_base_metadata = segment.metadata
-
+        try:
+            extraction_context = text[:METADATA_EXTRACTION_CONTEXT_SIZE]
             enhanced_metadata = self._extract_section_metadata(
-                text=current_text,
-                existing_metadata=current_base_metadata
+                text=extraction_context,
+                existing_metadata=base_metadata
             )
-            
-            try:
-                if len(segments_to_process) > 1:
-                    logger.info(f' - [{i+1}/{len(segments_to_process)}] Processing segment...')
-                
-                response_chunks = self.embedding_service.chunk_and_embed(data=current_text)
-                
-                if not response_chunks:
-                    logger.warning(f' - [{i+1}/{len(segments_to_process)}] Response was empty')
-                    continue
 
-                for semantic_chunk in response_chunks:
-                    semantic_chunk.text = semantic_chunk.text.lstrip(',')
+            if self.use_semantic:
+                logger.info(f"Using semantic chunking for section ({len(text)} chars)...")
+                
+                if len(text) > MAX_CHUNK_SIZE_FOR_SEMANTIC_SEARCH:
+                    logger.info(f"Text exceeds {MAX_CHUNK_SIZE_FOR_SEMANTIC_SEARCH} chars, pre-splitting with recursive splitter...")
+                    pre_chunks = self.splitter.split_text(text)
+                    pre_chunks = [
+                        self._sanitize_string(chunk) 
+                        for chunk in pre_chunks 
+                        if len(self._sanitize_string(chunk)) >= MIN_CHUNK_SIZE
+                    ]
+                    logger.info(f"Pre-split into {len(pre_chunks)} chunks for semantic processing")
+                else:
+                    pre_chunks = [text]
+                
+                # Process each pre-chunk with semantic chunking
+                for pre_chunk in pre_chunks:
+                    try:
+                        chunk_responses = self.embedding_service.chunk_and_embed(pre_chunk)
+                        
+                        if not chunk_responses:
+                            logger.warning(f"Semantic chunking returned no chunks for pre-chunk ({len(pre_chunk)} chars)")
+                            continue
+                        
+                        logger.debug(f"Semantic chunking created {len(chunk_responses)} chunks from {len(pre_chunk)} char pre-chunk")
+                        
+                        for chunk_response in chunk_responses:
+                            chunk_text = chunk_response.text
+                            
+                            if len(chunk_text) < MIN_CHUNK_SIZE:
+                                continue
+                            
+                            chunk_metadata = enhanced_metadata.copy()
+                            chunk_metadata['text'] = chunk_text
+                            
+                            embed_response = chunk_response.embed_text
+                            
+                            sparse_vec = None
+                            if chunk_response.sparse_embedding:
+                                sparse_vec = SparseVector(
+                                    indices=chunk_response.sparse_embedding.indices,
+                                    values=chunk_response.sparse_embedding.values
+                                )
+                            
+                            doc = MyDocument(
+                                id=embed_response.uuid,
+                                text=chunk_text,
+                                embedding=embed_response.embedding,
+                                sparse_embedding=sparse_vec,
+                                metadata=chunk_metadata
+                            )
+                            processed_final_docs.append(doc)
+                        
+                    except Exception as e:
+                        logger.error(f"Semantic chunking failed for pre-chunk: {e}")
+                        traceback.print_exc()
+                        continue
+                
+                if not processed_final_docs:
+                    logger.warning("All semantic chunking attempts failed, no documents generated")
                     
+            else:
+                # Traditional recursive splitter + embedding approach
+                logger.info(f"Using recursive splitter for section ({len(text)} chars)...")
+                
+                raw_text_chunks = self.splitter.split_text(text)
+                
+                if not raw_text_chunks:
+                    logger.warning("Splitter returned no chunks.")
+                    return []
+
+                valid_chunks = [
+                    self._sanitize_string(chunk) 
+                    for chunk in raw_text_chunks 
+                    if len(self._sanitize_string(chunk)) >= MIN_CHUNK_SIZE
+                ]
+
+                if not valid_chunks:
+                    return []
+
+                logger.info(f"Split section into {len(valid_chunks)} valid chunks. Sending batch to Embedding service...")
+                embedding_responses: List[EmbeddingResponse] = self.embedding_service.get_embedding_with_uuid(
+                    data=valid_chunks, 
+                    chunk_size=100 
+                )
+
+                if len(embedding_responses) != len(valid_chunks):
+                    logger.error(f"CRITICAL MISMATCH: Sent {len(valid_chunks)} chunks, got {len(embedding_responses)} embeddings.")
+                    return []
+
+                for i, response_obj in enumerate(embedding_responses):
+                    chunk_metadata = enhanced_metadata.copy()
+                    chunk_metadata['text'] = valid_chunks[i]
+                    chunk_metadata['chunking_method'] = 'recursive'
+
                     final_document = self._create_document_from_chunk(
-                        semantic_chunk,
-                        enhanced_metadata
+                        embedding_data=response_obj,
+                        text=valid_chunks[i],
+                        full_metadata=chunk_metadata
                     )
                     
                     if final_document:
                         processed_final_docs.append(final_document)
 
-            except Exception as e:
-                logger.error(f"Failed to process segment {i}: {e}")
-
+        except Exception as e:
+            logger.error(f"Failed to process document section: {e}")
+            traceback.print_exc()
+            
         return processed_final_docs
 
     def transform(self) -> None:
+        """
+        Main transformation pipeline: load, filter, clean, extract metadata, embed.
+        
+        Processes the markdown file through:
+        1. Load and split by headers (tables already extracted and included)
+        2. Filter out non-content sections
+        3. For tables: embed directly without chunking
+        4. For text: clean, extract metadata via LLM, chunk, and embed
+        5. Create MyDocument objects for storage
+        
+        Sets self.state to TRANSFORMED on success, FAILED on error.
+        Results are stored in self.documents.
+        """
         try:
             raw_documents = self._load_and_split_markdown()
-            documents = self.filter_unwanted_pages(raw_documents)
-
+            documents = self._filter_unwanted_sections(raw_documents)
             total_docs = len(documents)
-            logger.info(f"Starting transform for {total_docs} sections...")
+            logger.info(f"Processing {total_docs} text sections from '{self.file.name}'...")
 
             for i, doc in enumerate(documents):
                 index = i + 1
                 
-                cleaned_doc = self.clean_document_text(doc)
-                if len(cleaned_doc.page_content) < 50: 
+                cleaned_doc = self._clean_document_text(doc)
+                if len(cleaned_doc.page_content) < MIN_CHUNK_SIZE:
+                    logger.debug(f"[{index}/{total_docs}] Skipping short section ({len(cleaned_doc.page_content)} chars)")
                     continue
 
-                logger.info(f"[{index}/{total_docs}] Processing section of length: {len(cleaned_doc.page_content)}...")
+                logger.info(f"[{index}/{total_docs}] Processing section: {cleaned_doc.metadata.get('header_path', 'No headers')} ({len(cleaned_doc.page_content)} chars)")
 
-                cleaned_metadata = cleaned_doc.metadata.copy()
-                cleaned_metadata['parent_text'] = cleaned_doc.page_content
+                section_metadata = cleaned_doc.metadata.copy()
+                section_metadata['parent_text'] = cleaned_doc.page_content
 
-                processed_docs = self._process_document(cleaned_doc.page_content, cleaned_metadata)
+                processed_docs = self._process_document(cleaned_doc.page_content, section_metadata)
                 if processed_docs:
                     self.documents.extend(processed_docs)
-                    logger.debug(f" -> Generated {len(processed_docs)} chunks.")
+                    logger.debug(f" -> Generated {len(processed_docs)} chunks")
 
-            logger.info(f"File: {self.file} transformed! Total chunks: {len(self.documents)}")
+            logger.info(
+                f"✓ Transform complete for '{self.file.name}': "
+                f"{len(self.documents)} total documents "
+            )
             self.state = ETLState.TRANSFORMED
-            return
 
+        except FileNotFoundError as e:
+            logger.error(f"File not found: {self.file} - {e}")
+            self.state = ETLState.FAILED
         except Exception as e:
             logger.exception(f"Error during transform step: {e}")
-            traceback.print_exc()
             self.state = ETLState.FAILED
-            return

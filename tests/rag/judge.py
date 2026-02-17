@@ -5,7 +5,6 @@ class Judgement(BaseModel):
     relevancy_score: int = Field(description="Score 1-5. How well does the answer address the user's question?")
     faithfulness_score: int = Field(description="Score 1-5. Is the answer fully supported by the Retrieved Context?")
     reasoning: str = Field(description="Concise explanation for the scores.")
-    pass_fail: bool = Field(description="True ONLY if both scores are 4 or higher. False otherwise.")
 
 class Judge:
     def __init__(self, model_name="llama3.1:8b"):
@@ -41,10 +40,6 @@ class Judge:
            - 5 = Every fact in the answer is found in the RETRIEVED CONTEXT.
            - 1 = Answer contains hallucinations or info not in context.
 
-        --- PASS/FAIL RULE ---
-        - Set 'pass_fail' to TRUE if AND ONLY IF:
-          (Relevancy > 3) AND (Faithfulness > 3)
-        - Otherwise, set FALSE.
         """
 
         return self.structured_llm.invoke(prompt)
