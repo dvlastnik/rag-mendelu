@@ -45,7 +45,14 @@ def run_etl_drough(
         # TODO: Remove, this is only mocked this else branch should raise exception
         # pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
         # raise FileNotFoundError(f'Folder path argument is not set: {folder_path}.')
-        pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/ESOTC-2024-report.pdf']
+        # pdf_files = [
+        #     '/Users/david/Mendelu/Diplomka/drough_data/files/Statement_2022.pdf',
+        #     '/Users/david/Mendelu/Diplomka/drough_data/files/1347_Global-statement-2023_en.pdf',
+        #     '/Users/david/Mendelu/Diplomka/drough_data/files/WMO-1368-2025_en.pdf',
+        #     '/Users/david/Mendelu/Diplomka/drough_data/files/ESOTC-2024-report.pdf',
+        #     '/Users/david/Mendelu/Diplomka/drough_data/files/State of the Global Climate 2024_Extremes Supplement.pdf'
+        # ]
+        pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/1347_Global-statement-2023_en.pdf']
 
     if collection_name == '':
         db_repository.collection_name = constants.COLLECTION_NAME_DROUGH

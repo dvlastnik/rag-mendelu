@@ -10,6 +10,8 @@ from etl.BaseEtl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
 from database.base.MyDocument import MyDocument, SparseVector
 from text_embedding_api.TextEmbeddingService import EmbeddingResponse
+from semantic_chunking.sentence_similarity import SentenceSimilarity
+from semantic_chunking.similiar_sentence_splitter import SimilarSentenceSplitter
 from utils.Utils import Utils
 from utils.logging_config import get_logger
 
@@ -78,12 +80,16 @@ class DroughtEtl(BaseEtl):
         self.metadata_extractor = metadata_extractor
         self.table_processor = TableProcessor()
         self.use_semantic = use_semantic
+
         self.splitter = RecursiveCharacterTextSplitter(
             chunk_size=512,
             chunk_overlap=100,
             length_function=len,
             separators=["\n\n", "\n", ". ", " ", ""]
         )
+
+        sentence_similarity_model = SentenceSimilarity(embedding_service=embedding_service)
+        self.semantic_splitter = SimilarSentenceSplitter(similarity_model=sentence_similarity_model)
 
     def _sanitize_string(self, s: Optional[str]) -> str:
         """
@@ -404,115 +410,63 @@ class DroughtEtl(BaseEtl):
 
         processed_final_docs = []
         try:
-            extraction_context = text[:METADATA_EXTRACTION_CONTEXT_SIZE]
-            enhanced_metadata = self._extract_section_metadata(
-                text=extraction_context,
-                existing_metadata=base_metadata
-            )
+            # extraction_context = text[:METADATA_EXTRACTION_CONTEXT_SIZE]
+            # enhanced_metadata = self._extract_section_metadata(
+            #     text=extraction_context,
+            #     existing_metadata=base_metadata
+            # )
 
             if self.use_semantic:
-                logger.info(f"Using semantic chunking for section ({len(text)} chars)...")
-                
-                if len(text) > MAX_CHUNK_SIZE_FOR_SEMANTIC_SEARCH:
-                    logger.info(f"Text exceeds {MAX_CHUNK_SIZE_FOR_SEMANTIC_SEARCH} chars, pre-splitting with recursive splitter...")
-                    pre_chunks = self.splitter.split_text(text)
-                    pre_chunks = [
-                        self._sanitize_string(chunk) 
-                        for chunk in pre_chunks 
-                        if len(self._sanitize_string(chunk)) >= MIN_CHUNK_SIZE
-                    ]
-                    logger.info(f"Pre-split into {len(pre_chunks)} chunks for semantic processing")
-                else:
-                    pre_chunks = [text]
-                
-                # Process each pre-chunk with semantic chunking
-                for pre_chunk in pre_chunks:
-                    try:
-                        chunk_responses = self.embedding_service.chunk_and_embed(pre_chunk)
-                        
-                        if not chunk_responses:
-                            logger.warning(f"Semantic chunking returned no chunks for pre-chunk ({len(pre_chunk)} chars)")
-                            continue
-                        
-                        logger.debug(f"Semantic chunking created {len(chunk_responses)} chunks from {len(pre_chunk)} char pre-chunk")
-                        
-                        for chunk_response in chunk_responses:
-                            chunk_text = chunk_response.text
-                            
-                            if len(chunk_text) < MIN_CHUNK_SIZE:
-                                continue
-                            
-                            chunk_metadata = enhanced_metadata.copy()
-                            chunk_metadata['text'] = chunk_text
-                            
-                            embed_response = chunk_response.embed_text
-                            
-                            sparse_vec = None
-                            if chunk_response.sparse_embedding:
-                                sparse_vec = SparseVector(
-                                    indices=chunk_response.sparse_embedding.indices,
-                                    values=chunk_response.sparse_embedding.values
-                                )
-                            
-                            doc = MyDocument(
-                                id=embed_response.uuid,
-                                text=chunk_text,
-                                embedding=embed_response.embedding,
-                                sparse_embedding=sparse_vec,
-                                metadata=chunk_metadata
-                            )
-                            processed_final_docs.append(doc)
-                        
-                    except Exception as e:
-                        logger.error(f"Semantic chunking failed for pre-chunk: {e}")
-                        traceback.print_exc()
-                        continue
-                
-                if not processed_final_docs:
-                    logger.warning("All semantic chunking attempts failed, no documents generated")
+                logger.info(f"Using semantic splitter for section ({len(text)} chars)...")
+                raw_text_chunks = self.semantic_splitter.split_text(text)
                     
             else:
-                # Traditional recursive splitter + embedding approach
                 logger.info(f"Using recursive splitter for section ({len(text)} chars)...")
-                
                 raw_text_chunks = self.splitter.split_text(text)
                 
-                if not raw_text_chunks:
-                    logger.warning("Splitter returned no chunks.")
-                    return []
+            if not raw_text_chunks:
+                logger.warning("Splitter returned no chunks.")
+                return []
 
-                valid_chunks = [
-                    self._sanitize_string(chunk) 
-                    for chunk in raw_text_chunks 
-                    if len(self._sanitize_string(chunk)) >= MIN_CHUNK_SIZE
-                ]
+            valid_chunks = [
+                self._sanitize_string(chunk) 
+                for chunk in raw_text_chunks 
+                if len(self._sanitize_string(chunk)) >= MIN_CHUNK_SIZE
+            ]
 
-                if not valid_chunks:
-                    return []
+            if not valid_chunks:
+                return []
 
-                logger.info(f"Split section into {len(valid_chunks)} valid chunks. Sending batch to Embedding service...")
-                embedding_responses: List[EmbeddingResponse] = self.embedding_service.get_embedding_with_uuid(
-                    data=valid_chunks, 
-                    chunk_size=100 
+            logger.info(f"Split section into {len(valid_chunks)} valid chunks. Sending batch to Embedding service...")
+            embedding_responses: List[EmbeddingResponse] = self.embedding_service.get_embedding_with_uuid(
+                data=valid_chunks, 
+                chunk_size=32
+            )
+
+            if len(embedding_responses) != len(valid_chunks):
+                logger.error(f"CRITICAL MISMATCH: Sent {len(valid_chunks)} chunks, got {len(embedding_responses)} embeddings.")
+                return []
+
+            for i, response_obj in enumerate(embedding_responses):
+                logger.info(' - Extracting metadata...')
+                enhanced_metadata = self._extract_section_metadata(
+                    text=valid_chunks[i],
+                    existing_metadata=base_metadata
                 )
+                logger.info('-------------------------')
 
-                if len(embedding_responses) != len(valid_chunks):
-                    logger.error(f"CRITICAL MISMATCH: Sent {len(valid_chunks)} chunks, got {len(embedding_responses)} embeddings.")
-                    return []
+                chunk_metadata = enhanced_metadata.copy()
+                chunk_metadata['text'] = valid_chunks[i]
+                chunk_metadata['chunking_method'] = 'recursive'
 
-                for i, response_obj in enumerate(embedding_responses):
-                    chunk_metadata = enhanced_metadata.copy()
-                    chunk_metadata['text'] = valid_chunks[i]
-                    chunk_metadata['chunking_method'] = 'recursive'
-
-                    final_document = self._create_document_from_chunk(
-                        embedding_data=response_obj,
-                        text=valid_chunks[i],
-                        full_metadata=chunk_metadata
-                    )
-                    
-                    if final_document:
-                        processed_final_docs.append(final_document)
+                final_document = self._create_document_from_chunk(
+                    embedding_data=response_obj,
+                    text=valid_chunks[i],
+                    full_metadata=chunk_metadata
+                )
+                
+                if final_document:
+                    processed_final_docs.append(final_document)
 
         except Exception as e:
             logger.error(f"Failed to process document section: {e}")

@@ -48,7 +48,7 @@ class MarkdownTableExtractor:
     them for separate embedding and indexing.
     """
     
-    def __init__(self, context_window_chars: int = 500, use_llm: bool = True, llm_model: str = "granite4:3b"):
+    def __init__(self, context_window_chars: int = 1000, use_llm: bool = True, llm_model: str = "granite4:3b"):
         """
         Initialize the table extractor.
         

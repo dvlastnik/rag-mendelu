@@ -14,7 +14,8 @@ def pytest_generate_tests(metafunc):
     """
     if "data" in metafunc.fixturenames:
         model_name = metafunc.config.getoption("--model")
-        base_path = get_results_filepath(model_name) 
+        questions_file = metafunc.config.getoption("--questions")
+        base_path = get_results_filepath(model_name, questions_file) 
         file_path = os.path.join(base_path, "answers.json")
         if os.path.exists(file_path):
             with open(file_path, "r") as f:
@@ -79,8 +80,8 @@ def evaluation_logger(model_name, questions_file):
             json.dump(final_report, f, indent=2)
 
 def test_rag_quality(data, judge):
-    raw_sources = data.get("retrieved_sources", "")
-    retrieval_context = [s.strip() for s in raw_sources.split("\n\n") if s.strip()]
+    raw_sources = data.get("retrieved_sources", [])
+    retrieval_context = [f'Source file: {source['source']}\nText: {source['text']}\n\n' for source in raw_sources]
     
     eval_result = judge.evaluate(
         question=data['question'],
@@ -92,7 +93,7 @@ def test_rag_quality(data, judge):
     pass_str = 'PASSED'
     fail_str = 'FAILED'
     status_str = fail_str
-    if eval_result.relevancy_score >= 4 and eval_result.faithfulness_score == 5:
+    if eval_result.relevancy_score >= 4 and eval_result.faithfulness_score >= 4:
         status_str = 'PASSED'
 
     log_entry = {

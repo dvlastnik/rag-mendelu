@@ -163,6 +163,7 @@ class RagNodes:
         strategies = self._get_strategies(target)
         raw_docs = []
         used_strategy = None
+        n_results = 50
         
         for strategy in strategies:
             logger.info(f"Trying Strategy: {strategy['name']}")
@@ -171,14 +172,21 @@ class RagNodes:
                 text_embedded=dense_vec,
                 sparse_embedded=sparse_vec,
                 filter_dict=strategy['filter'],
-                n_results=10
+                n_results=n_results
             )
 
             if db_result.success and len(db_result.data) > 0:
-                raw_docs = db_result.data
+                raw_docs.extend(db_result.data)
                 used_strategy = strategy
-                logger.info(f"✅ Found {len(raw_docs)} docs using {strategy['name']}")
+                logger.info(f"- Found {len(raw_docs)} docs using {strategy['name']}")
+            
+            if len(raw_docs) >= n_results:
+                logger.info("✅ Found 50 documents, break")
                 break
+            elif used_strategy['name'] == 'Pure Vector Search':
+                logger.info(f"✅ Tried all strategies, found {len(raw_docs)} documents")
+                break
+        
         
         if not raw_docs:
             return {'search_results': []}
@@ -193,14 +201,15 @@ class RagNodes:
             
         return {'search_results': raw_docs}
     
-    def retrieval_grader_agent(self, state: AgentState):
+    def retrieval_grader_agent_llm(self, state: AgentState):
         logger.info("--- GRADING RETRIEVED DOCS ---")
         original_question = state['messages'][-1].content
         raw_documents = state.get('search_results')
         if len(raw_documents) == 0:
             return {'filtered_results': []}
+        elif len(raw_documents) <= 5:
+            return {'filtered_results': raw_documents}
 
-        # Deduplicate by document ID
         unique_docs = []
         seen_ids = set()
         for doc in raw_documents:
@@ -238,6 +247,39 @@ class RagNodes:
         except Exception as e:
             logger.error(f"Grading failed: {e}. Fallback: Keeping all unique docs.")
             return {'filtered_results': unique_docs}
+        
+    def retrieval_grader_agent(self, state: AgentState):
+        logger.info("--- GRADING & RE-RANKING DOCS ---")
+        original_question = state['messages'][-1].content
+        raw_documents = state.get('search_results', [])
+        
+        if not raw_documents:
+            return {'filtered_results': []}
+        
+        unique_docs = []
+        seen_ids = set()
+        for doc in raw_documents:
+            if doc.id not in seen_ids:
+                seen_ids.add(doc.id)
+                unique_docs.append(doc)
+        
+        passages = [
+            {"id": i, "text": doc.text, "meta": doc.metadata}
+            for i, doc in enumerate(unique_docs)
+        ]
+        
+        rerank_request = RerankRequest(query=original_question, passages=passages)
+        reranked_results = self.reranker.rerank(rerank_request)
+        
+        sorted_docs = [
+            unique_docs[result['id']] 
+            for result in sorted(reranked_results, key=lambda x: x['score'], reverse=True)
+        ]
+        
+        top_docs = sorted_docs[:10]
+        
+        logger.info(f"Kept top {len(top_docs)} documents after reranking")
+        return {'filtered_results': top_docs}
     
     def synthesizer_agent(self, state: AgentState):
         logger.info("--- SYNTHESIZING FINAL ANSWER ---")
@@ -338,46 +380,54 @@ class RagNodes:
         return END
     
     def _get_strategies(self, target: ExtractionScheme) -> Dict:
+        strategies = []
+    
         valid_year = self.db_repository.validate_filter(target.year, 'years')
         valid_location = self.db_repository.validate_filter(target.location, 'locations')
         valid_entities = None
         if target.entities:
-            
             for entity in target.entities:
                 if self.db_repository.validate_filter(entity, 'entities'):
                     valid_entities = target.entities
                     break
-
-        strategies = []
-        strict_filter = {}
-        name_parts = []
         
+        # Strategy 1: Strict filter (highest confidence)
+        strict_filter = {}
         if valid_location:
             strict_filter['locations'] = [valid_location]
-            name_parts.append("Location")
-            
         if valid_year:
             strict_filter['years'] = [valid_year]
-            name_parts.append("Year")
-        
         if valid_entities:
             strict_filter['entities'] = valid_entities
-            name_parts.append("Entities")
-            
+        
         if strict_filter:
             strategies.append({
                 "filter": strict_filter,
-                "name": f"Strict ({' + '.join(name_parts)})"
+                "name": f"Strict ({', '.join(strict_filter.keys())})",
+                "confidence": 1.0
             })
         
-
-        # backup
+        # Strategy 2: Relaxed filters (medium confidence)
         if len(strict_filter) > 1:
             if 'years' in strict_filter:
-                strategies.append({"filter": {'years': strict_filter['years']}, "name": "Relaxed (Year Only)"})
+                strategies.append({
+                    "filter": {'years': strict_filter['years']},
+                    "name": "Year Only",
+                    "confidence": 0.7
+                })
             if 'locations' in strict_filter:
-                strategies.append({"filter": {'locations': strict_filter['locations']}, "name": "Relaxed (Location Only)"})
-
-        strategies.append({"filter": {}, "name": "Pure Vector Search"})
-
+                strategies.append({
+                    "filter": {'locations': strict_filter['locations']},
+                    "name": "Location Only",
+                    "confidence": 0.6
+                })
+        
+        # Strategy 3: Semantic-only (low confidence, but add warning)
+        strategies.append({
+            "filter": {},
+            "name": "Pure Vector Search",
+            "confidence": 0.3,
+            "add_warning": True if (target.year or target.location) else False
+        })
+        
         return strategies

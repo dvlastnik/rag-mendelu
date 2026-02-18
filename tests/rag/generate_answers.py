@@ -92,9 +92,13 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
                 })
 
             sources = response['sources']
-            retrieved_docs = ''
+            retrieved_docs = []
             for source in sources:
-                retrieved_docs += f'Source from file: {source.metadata['source']}\nSource Text: {source.text}\n\n'
+                # retrieved_docs += f'Source from file: {source.metadata['source']}\nSource Text: {source.text}\n\n'
+                retrieved_docs.append({
+                    'source': source.metadata['source'],
+                    'text': source.text
+                })
         except Exception as e:
             print(f"ERROR: {str(e)}")
             generated_text = f"ERROR: {str(e)}"

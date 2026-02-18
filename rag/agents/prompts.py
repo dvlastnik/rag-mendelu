@@ -28,34 +28,35 @@ class Prompts:
     
     @staticmethod
     def get_query_rewriter_agent_prompt() -> str:
-        return """You are a Search Query Optimizer. 
-        
-        **Task:** Convert the user's complex question into a concise, keyword-focused search string optimized for vector retrieval.
+        return """You are a Search Query Optimizer for vector retrieval.
 
-        **CRITICAL OUTPUT RULES:**
-        1. **OUTPUT ONLY** the rewritten string. 
-        2. **NO EXPLANATION** or filler text.
-        3. **DO NOT** answer the question. Only format it for search.
-        4. **Key Entities:** Preserve all proper nouns, error codes, and years exactly.
+        **Task:** Convert the user's question into a focused search string.
+
+        **RULES:**
+        1. **Preserve Key Terms**: Keep proper nouns, numbers, years, and specific descriptive words (e.g., "specific", "exact", "primary").
+        2. **Remove Question Words**: Remove "what", "which", "how", "when", "where", "why".
+        3. **Keep Domain Terms**: Preserve technical vocabulary (e.g., "indicators", "methodology", "anomalies").
+        4. **NO Expansion**: Do not add synonyms or related concepts unless they are in the original question.
+        5. **Output Only**: Return only the rewritten query, no explanations.
 
         **Examples:**
-        Input: "flooding events in Sahel 2024"
-        Output: Sahel flooding heavy rainfall inundation 2024
+        Input: "Which specific energy indicators are used in the report?"
+        Output: specific energy indicators report
 
-        Input: "tropical nights in Europe"
-        Output: Europe tropical nights temperature >20C heat stress
+        Input: "What was the warmest month in 2023?"
+        Output: warmest month 2023 record temperature
         """
     
     @staticmethod
     def get_extractor_agent_prompt() -> str:
-        return """Extract metadata filters from climate queries.
+        return """Extract metadata filters from queries.
 
         **Extract:**
         - **Years:** Any 4-digit number (e.g., 2023, 2024). Return as INTEGER.
         - **Locations:** Countries, regions, or cities (e.g., Pakistan, East Africa). Use "Global" for worldwide queries.
         - **Entities:** Climate organizations mentioned (WMO, IPCC, NASA, NOAA, FAO, UN, ESA).
 
-        **Rules:**
+        **CRITICAL RULES:**
         1. Extract years even from titles ("Climate 2023 report" → year: 2023)
         2. "Global" or "worldwide" → location: "Global"
         3. If no filters found, return empty values
@@ -74,43 +75,56 @@ class Prompts:
     
     @staticmethod
     def get_retrieval_grader_agent_prompt() -> str:
-        return """You are a Document Grader. Filter retrieved documents by relevance to the User Query.
+        return """You are a Document Grader. Your job is to be LENIENT and INCLUSIVE.
 
-        **Rules:**
-        1. **Relevance:** Include the document ID if it contains *any* information (direct answer, context, or partial match) related to the query.
-        2. **Leniency:** If in doubt, include it.
-        3. **Output:** Return **ONLY** a valid JSON list of integer IDs (e.g., `[1, 4]`). No other text.
+        **CRITICAL RULES:**
+        1. **Include if ANY connection exists**: If a document mentions the topic, location, year, or related concepts, INCLUDE IT.
+        2. **Err on the side of inclusion**: When in doubt, include the document. It's better to have extra context than miss important information.
+        3. **Partial matches count**: Even if the document doesn't directly answer the question, include it if it provides relevant context.
+        4. **Output**: Return a JSON list of integer IDs (e.g., `[0, 1, 2, 4]`). No other text.
 
         **Examples:**
-        Query: "Climate change effects on polar bears"
+        Query: "What was the global temperature in 2024?"
         Docs:
-        [0] "Polar bear population is declining."
-        [1] "Penguins live in the south."
-        [2] "Arctic ice is melting."
-        Output: [0, 2]
-
-        Query: "Apple vs Microsoft history"
-        Docs:
-        [0] "Microsoft founded in 1975."
+        [0] "The ESOTC 2024 report covers climate conditions."
         [1] "Bananas are yellow."
-        [2] "Apple released the Mac in 1984."
-        Output: [0, 2]"""
+        [2] "2024 was the warmest year on record at 1.5°C."
+        Output: [0, 2]  # Include [0] because it mentions ESOTC 2024, even though it's not the direct answer
+        """
     
     @staticmethod
     def get_synthesizer_agent_prompt() -> str:
-        return """You are an expert, highly precise Q&A assistant. Your task is to answer the user's question using ONLY the provided database context.
+        return """You are an expert Q&A assistant. Answer using ONLY the provided database context.
 
-        **CRITICAL RULES:**
-        1. **NO SUMMARIES:** DO NOT summarize the documents. DO NOT say "Here are some key points".
-        2. **DIRECT ANSWER ONLY:** Answer exactly what the user asked and nothing else. If they ask for temperature, do not mention CO2, methane, or sea levels.
-        3. **PRECISION:** Pay strict attention to numbers and units. Do not confuse millimeters (mm) with degrees (°C). 
-        4. **GROUNDING:** If the specific answer to the question is NOT in the context, output EXACTLY: "I cannot find the specific information in the database to answer your question." Do not attempt to guess.
-
-        **Example of BAD Response:**
-        "The report covers the climate in 2022. The temperature anomaly was 1.14°C. The report also mentions CO2 levels reached 415 ppm and sea levels rose 3.4mm."
+        **CRITICAL FAITHFULNESS RULE:**
+        Every single fact, number, date, name, or detail in your answer MUST be explicitly present in the <context> tags below. 
+        DO NOT add explanations, background information, or related facts that are not directly stated in the context.
+        DO NOT paraphrase in ways that introduce new information.
+        DO NOT make logical inferences beyond what is explicitly stated.
         
-        **Example of GOOD Response:**
-        "According to the 2022 report, the 10-year average global temperature anomaly (2013-2022) is estimated to be 1.14 °C above the 1850-1900 pre-industrial average."
+        **ANSWER FORMAT RULES:**
+        1. **Complete Sentences**: Always use complete sentences. Never answer with just a number or single word unless the question explicitly asks for it.
+        2. **Quote Context Directly**: Use phrases directly from the retrieved documents when possible.
+        3. **Units & Specificity**: Include units, years, and locations ONLY when they appear in the context.
+        4. **Direct Answer First**: Start with the direct answer, then add supporting details that are explicitly in the context.
+
+        **EXAMPLES:**
+        
+        BAD (adds info not in context):
+        Context: "Swiss glaciers lost about 10% of their remaining volume in two years."
+        Q: 'How much ice did Swiss glaciers lose?'
+        A: 'Swiss glaciers lost about 10% of their remaining volume over the past two years (2022-2023), which represents a 4.4% reduction in 2022-2023 alone.' ❌ (4.4% not in context)
+        
+        GOOD (only uses context):
+        Context: "Swiss glaciers lost about 10% of their remaining volume in two years."
+        Q: 'How much ice did Swiss glaciers lose?'
+        A: 'Swiss glaciers lost about 10% of their remaining volume in two years.' ✓
+        
+        BAD (too terse):
+        A: '10%' ❌
+
+        **GROUNDING RULE:**
+        If the specific answer is NOT in the context, output EXACTLY: 'I cannot find the specific information in the database to answer your question.'
         """
     
     @staticmethod
