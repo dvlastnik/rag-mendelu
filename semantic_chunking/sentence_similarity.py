@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 
 class SentenceSimilarity:
     def __init__(self, embedding_service: TextEmbeddingService, similarity_threshold=0.3):

@@ -10,7 +10,7 @@ from datetime import datetime
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
 
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 from database.QdrantDbRepository import QdrantDbRepository
 from rag.AgenticRAG import AgenticRAG
 import constants
@@ -51,7 +51,7 @@ def save_answers(results: List[Dict[str, any]], model_name: str, duration: float
         json.dump(output_data, f, indent=2)
     
 def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1:8b', collection_name: str = '') -> List[Dict[str, any]]:
-    embedding_service = TextEmbeddingService(ip="localhost", port=8000)
+    embedding_service = TextEmbeddingService()
 
     valid_collection_name = constants.COLLECTION_NAME_DROUGH
     if collection_name != '':

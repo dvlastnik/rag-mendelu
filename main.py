@@ -9,7 +9,7 @@ from database.QdrantDbRepository import QdrantDbRepository
 from database.base.BaseDbRepository import BaseDbRepository
 from etl.DroughEtl import DroughtEtl
 from metadata_extractor.graph import build_extractor_graph
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 from rag.AgenticRAG import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
 from utils.Utils import Utils
@@ -193,11 +193,11 @@ def main():
     args = parse_args()
 
     # Objects
-    embedding_service = TextEmbeddingService(ip="localhost", port=8000)
+    embedding_service = TextEmbeddingService()
     db_repository = QdrantDbRepository(
         ip='localhost', 
         port=6333,
-        collection_name=constants.COLLECTION_NAME_DROUGH,
+        collection_name=os.environ.get("COLLECTION_NAME", "default_name"),
         metadata={
             'vector_size': int(os.environ.get("VECTOR_DB_VECTOR_SIZE", 384)),
             'distance': str(os.environ.get("VECTOR_DB_DISTANCE", "DOT"))

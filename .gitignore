@@ -181,3 +181,6 @@ data/ignore_*
 
 # test results
 tests/rag/results/*
+
+# other files for deepeval
+.*

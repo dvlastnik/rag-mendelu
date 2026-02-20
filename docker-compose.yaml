@@ -3,27 +3,6 @@ networks:
     driver: bridge
 
 services:
-  text-embedding-backend:
-    build: ./text_embedding_api/app/backend
-    container_name: text-embedding-backend
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
-    networks:
-      - net
-    env_file:
-      - .env
-  text-embedding-frontend:
-    build: ./text_embedding_api/app/frontend
-    container_name: text-embedding-frontend
-    ports:
-      # We map to host port 8081, since 8080 is used by Weaviate
-      - "${FRONTEND_PORT:-8081}:80"
-    networks:
-      - net
-    # Ensures the backend is started before the frontend
-    depends_on:
-      - text-embedding-backend
-
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant

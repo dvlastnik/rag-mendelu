@@ -10,7 +10,7 @@ from etl.EtlState import ETLState
 from utils.Utils import Utils
 from utils.logging_config import get_logger, highlight_log
 from etl.converters import convert_data
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 from database.base.MyDocument import MyDocument
 
 

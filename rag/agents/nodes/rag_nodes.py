@@ -12,7 +12,7 @@ from rag.agents.models import MultiExtraction, GradeDocumentsBatch, GradeHalluci
 from rag.agents.enums import NodeName
 from rag.agents.prompts import Prompts
 from database.base.BaseDbRepository import BaseDbRepository
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

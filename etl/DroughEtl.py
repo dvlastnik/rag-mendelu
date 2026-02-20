@@ -9,7 +9,7 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from etl.BaseEtl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
 from database.base.MyDocument import MyDocument, SparseVector
-from text_embedding_api.TextEmbeddingService import EmbeddingResponse
+from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
 from semantic_chunking.similiar_sentence_splitter import SimilarSentenceSplitter
 from utils.Utils import Utils

@@ -8,7 +8,7 @@ from rag.agents.nodes.general_nodes import GeneralNodes
 from rag.agents.nodes.rag_nodes import RagNodes
 
 from database.base.BaseDbRepository import BaseDbRepository
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

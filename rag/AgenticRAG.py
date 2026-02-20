@@ -5,7 +5,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 
 from database.base.BaseDbRepository import BaseDbRepository
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 from rag.agents.graph import build_graph
 from utils.logging_config import get_logger
 

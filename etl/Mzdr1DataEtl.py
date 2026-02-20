@@ -4,7 +4,7 @@ import pandas as pd
 from etl.BaseEtl import BaseEtl, ETLState
 from database.base.MyDocument import MyDocument
 from utils.logging_config import get_logger
-from text_embedding_api.TextEmbeddingService import TextEmbeddingService
+from text_embedding import TextEmbeddingService
 
 logger = get_logger(__name__)
 
