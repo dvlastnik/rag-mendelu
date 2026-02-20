@@ -3,6 +3,12 @@ from typing import List
 
 from rag.agents.enums import Intent
 
+class MultiQuery(BaseModel):
+    queries: List[str] = Field(
+        ...,
+        description="Exactly 2 alternative search query rephrasings of the user question."
+    )
+
 class ExtractionScheme(BaseModel):
     location: str | None
     year: int | None

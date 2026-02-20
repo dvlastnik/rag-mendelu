@@ -38,7 +38,7 @@ class GeneralNodes:
         return {"messages": [response]}
 
     @staticmethod
-    def route_intent(state: AgentState) -> Literal[NodeName.EXTRACTOR, NodeName.GENERAL]:
+    def route_intent(state: AgentState) -> Literal[NodeName.QUERY_REWRITER, NodeName.GENERAL]:
         if state['intent'] == Intent.RAG:
             return NodeName.QUERY_REWRITER
         return NodeName.GENERAL

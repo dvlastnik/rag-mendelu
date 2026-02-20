@@ -17,6 +17,8 @@ from database.base.MyDocument import MyDocument
 logger = get_logger(__name__)
 
 class BaseEtl(ABC):
+    OUTPUT_FOLDER: str = "data"
+
     def __init__(self, filepath: str, db_repositories: Dict[str, BaseDbRepository], embedding_service: TextEmbeddingService):
         super().__init__()
         self.documents: List[MyDocument] = []
@@ -59,7 +61,7 @@ class BaseEtl(ABC):
     def extract(self) -> None:
         try:
             try:
-                self.df = convert_data(self.file)
+                self.df = convert_data(self.file, output_folder=self.OUTPUT_FOLDER)
                 self.state = ETLState.EXTRACTED
             except ValueError as ve:
                 logger.error(ve)

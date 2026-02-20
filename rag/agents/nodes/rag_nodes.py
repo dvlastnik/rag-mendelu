@@ -8,7 +8,7 @@ import difflib
 
 from database.base.MyDocument import MyDocument
 from rag.agents.state import AgentState, WorkerState
-from rag.agents.models import MultiExtraction, GradeDocumentsBatch, GradeHallucinations, ExtractionScheme
+from rag.agents.models import MultiQuery, GradeDocumentsBatch, GradeHallucinations, ExtractionScheme
 from rag.agents.enums import NodeName
 from rag.agents.prompts import Prompts
 from database.base.BaseDbRepository import BaseDbRepository
@@ -48,98 +48,42 @@ class RagNodes:
     
     def query_rewriter_agent(self, state: AgentState):
         logger.info("--- QUERY REWRITER ---")
-    
-        original_query = state['messages'][-1].content
-        
-        response = self.llm.invoke([
-            SystemMessage(content=Prompts.get_query_rewriter_agent_prompt()),
-            HumanMessage(content=f'Input Query: "{original_query}"')
-        ])
-        
-        rewritten_query = response.content.strip()
-        logger.info(f"Rewritten: {rewritten_query}")
 
-        return {"rewritten_query": rewritten_query}
-    
-    def query_verifier_agent(self, state: AgentState):
-        logger.info('--- QUERY VERIFIER ---')
-        
-        original_query = state.get('original_query')
-        candidate_query = state.get('candidate_query')
-        
-        verification_input = f"""
-        [Original Query]: {original_query}
-        [Rewritten Query]: {candidate_query}
-        """
-        
-        response = self.llm.invoke([
-            SystemMessage(content=Prompts.get_query_verifier_prompt()),
-            HumanMessage(content=verification_input)
-        ])
-        
-        raw_output = response.content
-        logger.info(f'Verifier Thought: {raw_output}')
+        messages = state['messages']
+        original_query = messages[-1].content
 
-        decision = 'PASS'
-        reasoning = 'No reasoning provided.'
-        
-        if 'REASONING:' in raw_output:
-            parts = raw_output.split('DECISION:')
-            reasoning = parts[0].replace('REASONING:', '').strip()
-        
-        if 'DECISION: FAIL' in raw_output.upper():
-            decision = 'FAIL'
-        
-        if decision == 'PASS':
-            logger.info('✅ Query Verified.')
-            return {
-                'final_query': candidate_query, 
-                "feedback": None
-            }
+        # Include recent conversation history so follow-up questions resolve correctly
+        history = messages[-4:-1]
+        if history:
+            context_lines = [f"{m.type.upper()}: {m.content[:300]}" for m in history]
+            user_input = "Conversation so far:\n" + "\n".join(context_lines) + f"\n\nCurrent question: {original_query}"
         else:
-            logger.warning(f'❌ Verification Failed. Feedback: {reasoning}')
-            return {
-                "feedback": reasoning,
-                "final_query": None
-            }
-    
-    def extractor_agent(self, state: AgentState):
-        logger.info("--- EXTRACTING TARGETS ---")
-        query = state['messages'][-1].content
-        valid_data = self.db_repository.valid_metadata
-        valid_years = valid_data['years']
-        
-        extractor = self.llm.with_structured_output(MultiExtraction)
-        result = extractor.invoke([
-            SystemMessage(content=Prompts.get_extractor_agent_prompt()),
-            HumanMessage(content=query)
-        ])
-        
-        raw_extraction = cast(MultiExtraction, result)
-        final_targets = []
-        for item in raw_extraction.targets:
-            if item.year:
-                if item.year in valid_years:
-                    pass
-                else:
-                    logger.warning(f'Dropping invalid year: {item.year}')
-                    item.year = None
+            user_input = f"Current question: {original_query}"
 
-            if item.location:
-                item.location = self._validate_metadata_field(item.location, 'locations')
-            
-            if item.entities:
-                validated_entities = []
-                for entity in item.entities:
-                    validated = self._validate_metadata_field(entity, 'entities')
-                    if validated:
-                        validated_entities.append(validated)
-                item.entities = validated_entities if validated_entities else None
-            
-            final_targets.append(item)
+        try:
+            rewriter = self.llm.with_structured_output(MultiQuery)
+            result = cast(MultiQuery, rewriter.invoke([
+                SystemMessage(content=Prompts.get_query_rewriter_agent_prompt()),
+                HumanMessage(content=user_input)
+            ]))
+            rephrasings = [q.strip() for q in result.queries if q.strip()]
+        except Exception as e:
+            logger.warning(f"Multi-query generation failed ({e}), falling back to original query only.")
+            rephrasings = []
 
-        logger.info(f"Final Targets: {final_targets}")
-        return {'extracted_data': final_targets}
+        # Always keep the original as first query for maximum recall
+        all_queries = [original_query] + rephrasings
+
+        # Deduplicate while preserving order
+        seen: set = set()
+        unique_queries = []
+        for q in all_queries:
+            if q.lower() not in seen:
+                seen.add(q.lower())
+                unique_queries.append(q)
+
+        logger.info(f"Queries ({len(unique_queries)}): {unique_queries}")
+        return {"rewritten_queries": unique_queries}
     
     def research_worker(self, state: WorkerState):
         target = state.get('target')
@@ -164,7 +108,8 @@ class RagNodes:
         raw_docs = []
         used_strategy = None
         n_results = 50
-        
+        sufficient_results = 15  # stop early when a confident strategy finds enough
+
         for strategy in strategies:
             logger.info(f"Trying Strategy: {strategy['name']}")
             db_result = self.db_repository.search(
@@ -179,11 +124,14 @@ class RagNodes:
                 raw_docs.extend(db_result.data)
                 used_strategy = strategy
                 logger.info(f"- Found {len(raw_docs)} docs using {strategy['name']}")
-            
+
             if len(raw_docs) >= n_results:
-                logger.info("✅ Found 50 documents, break")
+                logger.info("✅ Found 50 documents, stopping")
                 break
-            elif used_strategy['name'] == 'Pure Vector Search':
+            if len(raw_docs) >= sufficient_results and strategy.get('confidence', 0) >= 0.7:
+                logger.info(f"✅ Sufficient confident results ({len(raw_docs)}) from '{strategy['name']}', stopping")
+                break
+            if strategy['name'] == 'Pure Vector Search':
                 logger.info(f"✅ Tried all strategies, found {len(raw_docs)} documents")
                 break
         
@@ -281,28 +229,60 @@ class RagNodes:
         logger.info(f"Kept top {len(top_docs)} documents after reranking")
         return {'filtered_results': top_docs}
     
+    def context_compressor_agent(self, state: AgentState):
+        logger.info("--- COMPRESSING CONTEXT ---")
+        query = state['messages'][-1].content
+        docs = state.get('filtered_results', [])
+
+        if not docs:
+            return {'filtered_results': []}
+
+        compressed_docs = []
+        for doc in docs:
+            # Very short chunks don't benefit from compression
+            if len(doc.text) < 200:
+                compressed_docs.append(doc)
+                continue
+            try:
+                response = self.llm.invoke([
+                    SystemMessage(content=Prompts.get_context_compressor_prompt()),
+                    HumanMessage(content=f"Query: {query}\n\nDocument:\n{doc.text}")
+                ])
+                compressed_text = response.content.strip()
+                if not compressed_text or len(compressed_text) < 20:
+                    compressed_docs.append(doc)
+                    continue
+                compressed_docs.append(MyDocument(
+                    id=doc.id,
+                    text=compressed_text,
+                    embedding=doc.embedding,
+                    sparse_embedding=doc.sparse_embedding,
+                    metadata=doc.metadata,
+                ))
+            except Exception as e:
+                logger.warning(f"Compression failed for doc {doc.id}: {e}, keeping original")
+                compressed_docs.append(doc)
+
+        logger.info(f"Compressed {len(compressed_docs)} documents")
+        return {'context_compressor_results': compressed_docs}
+
     def synthesizer_agent(self, state: AgentState):
         logger.info("--- SYNTHESIZING FINAL ANSWER ---")
         user_query = state['messages'][-1].content
-        results = state.get('filtered_results')
-        if len(results) == 0:
-            return {'messages': [AIMessage(content='I could not find specific information in the database to answer your comparison.')]}
+        results = state.get('context_compressor_results', [])
+        if not results:
+            return {'messages': [AIMessage(content='I could not find specific information in the database to answer your question.')]}
 
         doc_texts = []
-        for doc in results:
-            doc_texts.append(f"{doc.text}\nSource file: {doc.metadata['source']}")
+        for i, doc in enumerate(results, 1):
+            doc_texts.append(f"[{i}] {doc.text}\nSource: {doc.metadata.get('source', 'unknown')}")
 
         context_block = "\n\n".join(doc_texts)
-        human_prompt = f"""User Question: "{user_query}"
-        Context from Database:
-        -----
-        {context_block}
-        -----
-        """
+        human_prompt = f'User Question: "{user_query}"\n\nSources:\n{context_block}'
 
         is_retry = state.get("hallucination_status") == "hallucinated"
         if is_retry:
-            human_prompt += "\n\nCRITICAL WARNING: Your previous answer was rejected because it contained facts NOT present in the search results. Rewrite it using ONLY the provided text."
+            human_prompt += "\n\nCRITICAL WARNING: Your previous answer was rejected for containing facts NOT present in the sources. Rewrite using ONLY the provided sources."
 
         response = self.llm.invoke([
             SystemMessage(content=Prompts.get_synthesizer_agent_prompt()),
@@ -314,7 +294,7 @@ class RagNodes:
     def hallucination_grader_agent(self, state: AgentState):
         logger.info("--- CHECKING FOR HALLUCINATIONS ---")
         current_retries = state.get('hallucination_retries', 0)
-        documents = state.get('filtered_results', [])
+        documents = state.get('context_compressor_results', [])
         generated_answer = state['messages'][-1].content
 
         doc_texts = []
@@ -348,17 +328,19 @@ class RagNodes:
     @staticmethod
     def validate_and_map(state: AgentState) -> Literal[NodeName.RESEARCH_WORKER, NodeName.ERROR]:
         data = state.get('extracted_data', [])
-        query = state.get('rewritten_query') or state['messages'][-1].content
-        
+        queries = state.get('rewritten_queries') or [state['messages'][-1].content]
+
         if not data:
             dummy_target = ExtractionScheme(location=None, year=None, entities=None)
             return [
-                Send(NodeName.RESEARCH_WORKER, {'target': dummy_target, 'query': query})
+                Send(NodeName.RESEARCH_WORKER, {'target': dummy_target, 'query': q})
+                for q in queries
             ]
 
         return [
-            Send(NodeName.RESEARCH_WORKER, {'target': t, 'query': query}) 
+            Send(NodeName.RESEARCH_WORKER, {'target': t, 'query': q})
             for t in data
+            for q in queries
         ]
     
     @staticmethod

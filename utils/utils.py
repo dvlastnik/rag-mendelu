@@ -181,16 +181,12 @@ class Utils:
 
 
     @staticmethod
-    def convert_pdf_to_md(path: pathlib.Path, output_folder: str | None = None):
-        """Convert one PDF to Markdown."""
+    def convert_to_md(path: pathlib.Path, output_folder: str | None = None):
+        """Convert a file to Markdown using Docling (supports PDF, DOCX, PPTX, HTML, etc.)."""
         if not path.exists():
             logger.error(f"File not found: {path}")
             return
 
-        if path.suffix.lower() != ".pdf":
-            logger.warning(f"Skipping non-PDF file: {path.name}")
-            return
-        
         output_path = Utils.get_output_path(path=path, output_folder=output_folder, file_type="md")
 
         if output_path.exists() and output_path.is_file():
@@ -198,35 +194,23 @@ class Utils:
             return
 
         try:
-            logger.info(f"Processing {path}...")
-
+            logger.info(f"Converting {path.name} to Markdown...")
             converter = DocumentConverter()
             result = converter.convert(str(path))
             text = result.document.export_to_markdown()
-            
-            # config_dict = {
-            #     "disable_image_extraction": True,
-            #     "disable_multiprocessing": True,
-            #     "output_format": "markdown"
-            # }
-            
-            # config_parser = ConfigParser(config_dict)
-            
-            # converter = PdfConverter(
-            #     artifact_dict=create_model_dict(),
-            #     config=config_parser.generate_config_dict()
-            # )
-            
-            # rendered = converter(str(path))
-            # text, _, _ = text_from_rendered(rendered)
-
             output_path.write_text(text, encoding="utf-8")
             logger.info(f"Converted: {output_path}")
-            
         except Exception as e:
             logger.error(f"Error converting {path.name}: {e}")
             logger.error(traceback.format_exc())
+
+    @staticmethod
+    def convert_pdf_to_md(path: pathlib.Path, output_folder: str | None = None):
+        """Convert one PDF to Markdown. Kept for backward compatibility."""
+        if path.suffix.lower() != ".pdf":
+            logger.warning(f"Skipping non-PDF file: {path.name}")
             return
+        Utils.convert_to_md(path, output_folder=output_folder)
 
     def find_files(folder_path: str, file_type: str) -> List[str]:
         """

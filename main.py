@@ -7,8 +7,7 @@ from pathlib import Path
 
 from database.QdrantDbRepository import QdrantDbRepository
 from database.base.BaseDbRepository import BaseDbRepository
-from etl.DroughEtl import DroughtEtl
-from metadata_extractor.graph import build_extractor_graph
+from etl.GeneralEtl import GeneralEtl
 from text_embedding import TextEmbeddingService
 from rag.AgenticRAG import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
@@ -20,73 +19,58 @@ load_dotenv()
 setup_logging()
 logger = get_logger(__name__)
 
-def run_etl_drough(
-        path: str, 
-        delete_collection: bool, 
-        embedding_service: TextEmbeddingService, 
-        db_repository: BaseDbRepository, 
-        collection_name: str, 
-        use_recursive_chunking: bool
+def run_etl_general(
+        path: str,
+        delete_collection: bool,
+        embedding_service: TextEmbeddingService,
+        db_repository: BaseDbRepository,
+        collection_name: str,
+        use_recursive_chunking: bool,
     ):
-    """Runs the Drough (PDF) ETL pipeline on all files."""
-    highlight_log(logger, "Starting Drough ETL pipeline...")
-    if path != '':
-        path_obj = Path(path)
-        if path_obj.exists():
-            if path_obj.is_dir():
-                print('is a dir')
-                pdf_files = Utils.find_files(folder_path=path, file_type='pdf')
-            else:
-                print('is a file')
-                pdf_files = [path]
-        else:
-            raise FileNotFoundError(f'Folders or file at location {path_obj} not found')
-    else:
-        # TODO: Remove, this is only mocked this else branch should raise exception
-        # pdf_files = Utils.find_files(folder_path='/Users/david/Mendelu/Diplomka/drough_data/files', file_type='pdf')
-        # raise FileNotFoundError(f'Folder path argument is not set: {folder_path}.')
-        # pdf_files = [
-        #     '/Users/david/Mendelu/Diplomka/drough_data/files/Statement_2022.pdf',
-        #     '/Users/david/Mendelu/Diplomka/drough_data/files/1347_Global-statement-2023_en.pdf',
-        #     '/Users/david/Mendelu/Diplomka/drough_data/files/WMO-1368-2025_en.pdf',
-        #     '/Users/david/Mendelu/Diplomka/drough_data/files/ESOTC-2024-report.pdf',
-        #     '/Users/david/Mendelu/Diplomka/drough_data/files/State of the Global Climate 2024_Extremes Supplement.pdf'
-        # ]
-        pdf_files = ['/Users/david/Mendelu/Diplomka/drough_data/files/1347_Global-statement-2023_en.pdf']
+    """Runs the general ETL pipeline on any supported file type."""
+    highlight_log(logger, "Starting General ETL pipeline...")
 
-    if collection_name == '':
-        db_repository.collection_name = constants.COLLECTION_NAME_DROUGH
+    if not path:
+        raise ValueError("--path is required for ETL.")
+
+    path_obj = Path(path)
+    if not path_obj.exists():
+        raise FileNotFoundError(f"Path not found: {path_obj}")
+
+    if path_obj.is_dir():
+        files = [
+            str(f) for f in path_obj.rglob("*")
+            if f.is_file() and f.suffix.lower() in GeneralEtl.SUPPORTED_EXTENSIONS
+        ]
+        logger.info(f"Found {len(files)} supported files in '{path_obj}'")
     else:
+        files = [str(path_obj)]
+
+    if collection_name:
         db_repository.collection_name = collection_name
     db_repository.connect_and_create_collection(delete_collection)
 
-    metadata_extractor = build_extractor_graph()
+    use_semantic = not use_recursive_chunking
 
-    use_semantic_chunking = True,
-    if use_recursive_chunking:
-        use_semantic_chunking = False
-
-    for file in pdf_files:
+    for file in files:
         start_time = time.time()
 
-        obj = DroughtEtl(
+        obj = GeneralEtl(
             filepath=file,
             db_repositories={'qdrant': db_repository},
             embedding_service=embedding_service,
-            metadata_extractor=metadata_extractor,
-            use_semantic=use_semantic_chunking
+            use_semantic=use_semantic,
         )
         status = obj.run()
 
-        end_time = time.time()
-        elapsed = end_time - start_time
-        delta = datetime.timedelta(seconds=elapsed)
-        highlight_log(logger, str(delta), character='~')
-        
+        elapsed = time.time() - start_time
+        highlight_log(logger, str(datetime.timedelta(seconds=elapsed)), character='~')
+
         if not status:
             logger.warning('ETL failed, stopping entire pipeline...')
             break
-    highlight_log(logger, 'Drough ETL pipeline finished.')
+
+    highlight_log(logger, 'General ETL pipeline finished.')
 
 def check_databases(db_repository: BaseDbRepository):
     """Checks the record counts for configured databases."""
@@ -205,13 +189,13 @@ def main():
     )
 
     if args.run_etl:
-        run_etl_drough(
-            path=args.path, 
-            delete_collection=args.erase, 
-            embedding_service=embedding_service, 
-            db_repository=db_repository, 
+        run_etl_general(
+            path=args.path,
+            delete_collection=args.erase,
+            embedding_service=embedding_service,
+            db_repository=db_repository,
             collection_name=args.collection_name,
-            use_recursive_chunking=args.recursive_chunking
+            use_recursive_chunking=args.recursive_chunking,
         )
         
     elif args.check_dbs:

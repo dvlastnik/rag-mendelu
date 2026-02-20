@@ -30,7 +30,7 @@ class AgenticRAG:
         
         initial_state = {
             'messages': [HumanMessage(content=question)],
-            'rewritten_query': '',
+            'rewritten_queries': [],
             'search_results': [],
             'extracted_data': [],
             'filtered_results': [],
@@ -41,13 +41,15 @@ class AgenticRAG:
             final_state = self.agents.invoke(initial_state, config={"recursion_limit": 50})
             last_message = final_state['messages'][-1]
 
+            rewritten_queries = final_state.get('rewritten_queries', [])
             return {
                 'agent_state': final_state,
                 'original_query': question,
-                'rewritten_query': final_state['rewritten_query'],
+                'rewritten_queries': rewritten_queries,
                 'extracted_data': final_state['extracted_data'],
                 'response': last_message.content,
-                'sources': final_state['filtered_results']
+                'sources': final_state['filtered_results'],
+                'compressor_results': final_state['context_compressor_results']
             }
             
         except Exception as e:

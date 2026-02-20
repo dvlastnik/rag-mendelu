@@ -30,9 +30,9 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     builder.add_node(NodeName.GENERAL, router_nodes.general_agent)
     # rag
     builder.add_node(NodeName.QUERY_REWRITER, rag_nodes.query_rewriter_agent)
-    builder.add_node(NodeName.EXTRACTOR, rag_nodes.extractor_agent)
     builder.add_node(NodeName.RESEARCH_WORKER, rag_nodes.research_worker)
     builder.add_node(NodeName.RETRIEVAL_GRADER_AGENT, rag_nodes.retrieval_grader_agent)
+    builder.add_node(NodeName.CONTEXT_COMPRESSOR, rag_nodes.context_compressor_agent)
     builder.add_node(NodeName.HALLUCINATION_GRADER_AGENT, rag_nodes.hallucination_grader_agent)
     builder.add_node(NodeName.SYNTHESIZER, rag_nodes.synthesizer_agent)
     builder.add_node(NodeName.ERROR, rag_nodes.error_agent)
@@ -46,18 +46,16 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
     )
     builder.add_edge(NodeName.GENERAL, END)
     # rag
-    builder.add_edge(NodeName.QUERY_REWRITER, NodeName.EXTRACTOR)
-    
     builder.add_conditional_edges(
-        NodeName.EXTRACTOR,
+        NodeName.QUERY_REWRITER,
         RagNodes.validate_and_map,
         path_map={NodeName.RESEARCH_WORKER: NodeName.RESEARCH_WORKER, NodeName.ERROR: NodeName.ERROR}
     )
     builder.add_edge(NodeName.ERROR, END)
-    # builder.add_edge(NodeName.EXTRACTOR, NodeName.RESEARCH_WORKER)
 
     builder.add_edge(NodeName.RESEARCH_WORKER, NodeName.RETRIEVAL_GRADER_AGENT)
-    builder.add_edge(NodeName.RETRIEVAL_GRADER_AGENT, NodeName.SYNTHESIZER)
+    builder.add_edge(NodeName.RETRIEVAL_GRADER_AGENT, NodeName.CONTEXT_COMPRESSOR)
+    builder.add_edge(NodeName.CONTEXT_COMPRESSOR, NodeName.SYNTHESIZER)
     builder.add_edge(NodeName.SYNTHESIZER, NodeName.HALLUCINATION_GRADER_AGENT)
 
     builder.add_conditional_edges(
@@ -68,7 +66,5 @@ def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbed
             END: END
         }
     )
-
-    builder.add_edge(NodeName.SYNTHESIZER, END)
     
     return builder.compile()

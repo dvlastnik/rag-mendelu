@@ -34,6 +34,8 @@ METADATA_EXTRACTION_CONTEXT_SIZE = 3000
 MAX_CHUNK_SIZE_FOR_SEMANTIC_SEARCH = 3000
 
 class DroughtEtl(BaseEtl):
+    OUTPUT_FOLDER = "data/drough"
+
     """
     ETL pipeline for processing climate/drought-related markdown documents.
     
