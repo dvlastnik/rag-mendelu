@@ -52,6 +52,7 @@ def evaluation_logger(model_name, questions_file):
         if '/' in model_name:
             model_name = model_name.replace('/', '_')
         output_path = os.path.join(output_dir, f'judgement_report_{model_name}.json')
+        failed_tests_output_path = os.path.join(output_dir, f'failed_tests_{model_name}.json')
         answers_path = os.path.join(output_dir, 'answers.json')
 
         duration = 0
@@ -79,6 +80,14 @@ def evaluation_logger(model_name, questions_file):
         with open(output_path, "w") as f:
             json.dump(final_report, f, indent=2)
 
+        failed_tests = []
+        for report in final_report['details']:
+            if report['status'] == "FAILED":
+                failed_tests.append(report['status'])
+
+        with open(failed_tests_output_path, "w") as f:
+            json.dump(failed_tests, f, indent=4)
+
 def test_rag_quality(data, judge):
     raw_sources = data.get("retrieved_sources", [])
     retrieval_context = [f'Source file: {source['source']}\nText: {source['text']}\n\n' for source in raw_sources]
@@ -102,7 +111,7 @@ def test_rag_quality(data, judge):
         'answer': data['generated_answer'],
         'extracted_data': data['extracted_data'],
         'retrieved_sources': data['retrieved_sources'],
-        'rewritten_query': data['rewritten_query'],
+        'rewritten_queries': data['rewritten_queries'],
         'true_answer': data['ground_truth'],
         'scores': {
             'relevancy': eval_result.relevancy_score,

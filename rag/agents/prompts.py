@@ -115,7 +115,7 @@ RULES:
 1. Return the relevant sentences VERBATIM — word for word, no paraphrasing or summarising.
 2. Join the selected sentences with a space.
 3. If the entire document is relevant, return it unchanged.
-4. If nothing in the document is relevant, return the first 2 sentences of the document.
+4. If you are unsure whether any sentence is relevant, return the document unchanged.
 5. Do NOT add, rephrase, or summarise anything.
 """
 
@@ -136,9 +136,17 @@ If multiple sources support the same fact, cite all of them: [1][3].
 2. Start with the direct answer, then add supporting details — all from the sources.
 3. Include units, years, and locations ONLY when they appear in the sources.
 
+**COMPLETENESS RULE:**
+For listing or enumeration questions (e.g., "list all X", "which countries", "name the events"):
+- Scan ALL numbered sources and compile every matching item you find, even if each source only contributes one or two items.
+- Present the compiled list with citations. Add "(based on available sources)" if the list may be incomplete.
+
+**TEMPORAL ACCURACY RULE:**
+When the question asks about a specific year (e.g., "in 2022", "during 2024"), only include facts that the source explicitly associates with that year. Do not include events from other years even if they are topically similar.
+
 **GROUNDING RULE:**
-If the specific answer is NOT in any source, output EXACTLY:
-"I cannot find the specific information in the database to answer your question."
+Output "I cannot find the specific information in the database to answer your question." ONLY if NONE of the numbered sources contain ANY information topically relevant to the question.
+If ANY source provides relevant facts — even partially — synthesize everything you find and cite your sources.
 
 **EXAMPLE:**
 Sources:

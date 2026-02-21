@@ -41,7 +41,7 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 
 **`etl/`** — Data ingestion pipeline (ETL pattern)
 - `BaseEtl` → abstract base with `extract()`, `transform()`, `load()` state machine; `OUTPUT_FOLDER` class attr controls where converted Markdown is written
-- `GeneralEtl` → **primary ETL** for any file type; converts to Markdown in-process, splits by headers, extracts tables, cleans text, semantic/recursive chunks, embeds; output goes to `data/general/`
+- `GeneralEtl` → **primary ETL** for any file type; converts to Markdown in-process, splits by headers, extracts tables, cleans text, semantic/recursive chunks (`chunk_size=768`, `chunk_overlap=200`), embeds; output goes to `data/general/`
 - `DroughtEtl` → legacy ETL for climate PDFs only; reads pre-converted Markdown from `data/drough/`; includes LLM-based metadata extraction (years, locations, entities)
 - `converters.py` → registry of per-extension converters (`@register_converter`); called by `BaseEtl.extract()`
 - `loaders.py` → loader registry; unregistered extensions fall back to `_insert_by_chunks()` (the default for all `GeneralEtl` file types)
@@ -108,3 +108,13 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 - `--vector-db` flag exists in main.py but only `qdrant` is actively used
 - Tests in `tests/rag/` require infrastructure running and a populated Qdrant collection
 - `DroughtEtl` is retained for the climate dataset but `GeneralEtl` is the active default
+- Reranker in `rag_nodes.py` (`retrieval_grader_agent`) keeps top **20** docs after reranking (increased from 10); improves coverage for listing/enumeration questions
+- Re-indexing required when changing chunk parameters: `uv run main.py --run-etl --erase --path <folder>`
+
+### RAG Prompt Design
+Key rules currently in effect in `rag/agents/prompts.py` (Synthesizer node):
+- **COMPLETENESS RULE**: For enumeration/listing questions, compile partial lists from *all* retrieved sources rather than stopping at the first match
+- **TEMPORAL ACCURACY RULE**: Only include facts that apply to the year explicitly asked; do not mix data from other years
+- **GROUNDING RULE**: Refuse to answer only when *none* of the sources are topically relevant — do not refuse merely because the answer is incomplete
+
+Context compressor rule (also in `prompts.py`): when uncertain whether a sentence is relevant, return the document unchanged rather than truncating (prevents injecting noise into the Synthesizer).

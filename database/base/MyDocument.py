@@ -1,5 +1,5 @@
 from typing import List, Dict, Optional, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 @dataclass
 class SparseVector:
@@ -41,5 +41,10 @@ class MyDocument():
             ) for i in range(length)]
         
         return MyDocument(id=ids[0], text=documents[0], metadata=metadatas[0])
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+    
+    
 
         

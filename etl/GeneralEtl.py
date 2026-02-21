@@ -28,7 +28,7 @@ _RE_SINGLE_NEWLINE = re.compile(r'(?<!\n)\n(?!\n)')
 _RE_MULTI_NEWLINE = re.compile(r'\n{3,}')
 _RE_MULTI_SPACE = re.compile(r'[ \t]+')
 
-# Markdown syntax stripping
+# markdown syntax
 _RE_MD_BOLD = re.compile(r'\*\*(.+?)\*\*|__(.+?)__', re.DOTALL)
 _RE_MD_ITALIC = re.compile(r'\*(.+?)\*', re.DOTALL)
 _RE_MD_CODE = re.compile(r'`(.+?)`', re.DOTALL)
@@ -63,8 +63,8 @@ class GeneralEtl(BaseEtl):
         self.table_processor = TableProcessor()
 
         self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=512,
-            chunk_overlap=100,
+            chunk_size=768,
+            chunk_overlap=200,
             length_function=len,
             separators=["\n\n", "\n", ". ", " ", ""],
         )
@@ -107,7 +107,7 @@ class GeneralEtl(BaseEtl):
 
             for i, doc in enumerate(split_docs, 1):
                 cleaned = self._clean_text(doc.page_content)
-                if len(cleaned) < MIN_CHUNK_SIZE:
+                if not cleaned:
                     continue
 
                 section_metadata = {**base_metadata, **doc.metadata}
@@ -118,7 +118,7 @@ class GeneralEtl(BaseEtl):
 
             for table_doc in table_documents:
                 table_text = table_doc['text']
-                if not table_text or len(table_text) < MIN_CHUNK_SIZE:
+                if not table_text:
                     continue
 
                 table_meta = {**base_metadata, **table_doc['metadata']}
@@ -288,9 +288,6 @@ class GeneralEtl(BaseEtl):
 
     def _process_section(self, text: str, metadata: Dict) -> List[MyDocument]:
         """Chunk a section and embed each chunk into a MyDocument."""
-        if len(text) < MIN_CHUNK_SIZE:
-            return []
-
         try:
             if self.use_semantic:
                 raw_chunks = self.semantic_splitter.split_text(text)

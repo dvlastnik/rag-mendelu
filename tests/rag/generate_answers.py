@@ -10,6 +10,7 @@ from datetime import datetime
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
 
+from database.base.MyDocument import MyDocument
 from text_embedding import TextEmbeddingService
 from database.QdrantDbRepository import QdrantDbRepository
 from rag.AgenticRAG import AgenticRAG
@@ -81,7 +82,12 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             response = rag.chat(question)
             generated_text = response['response']
             original_query = response['original_query']
-            rewritten_query = response['rewritten_query']
+            rewritten_queries = response['rewritten_queries']
+
+            compressor_results = response.get('compressor_results', [])
+            compressor_results_dicts = []
+            for compressor_result in compressor_results:
+                compressor_results_dicts.append(compressor_result.to_dict())
 
             extracted_data = []
             for e in response['extracted_data']:
@@ -94,7 +100,6 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             sources = response['sources']
             retrieved_docs = []
             for source in sources:
-                # retrieved_docs += f'Source from file: {source.metadata['source']}\nSource Text: {source.text}\n\n'
                 retrieved_docs.append({
                     'source': source.metadata['source'],
                     'text': source.text
@@ -110,9 +115,10 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             'ground_truth': q['response'],
             'generated_answer': generated_text,
             'retrieved_sources': retrieved_docs,
+            'compressor_results': compressor_results_dicts,
             'extracted_data': extracted_data,
             'original_query': original_query,
-            'rewritten_query': rewritten_query
+            'rewritten_queries': rewritten_queries
         })
 
     return results

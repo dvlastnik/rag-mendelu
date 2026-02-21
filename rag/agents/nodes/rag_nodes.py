@@ -224,8 +224,8 @@ class RagNodes:
             for result in sorted(reranked_results, key=lambda x: x['score'], reverse=True)
         ]
         
-        top_docs = sorted_docs[:10]
-        
+        top_docs = sorted_docs[:20]
+
         logger.info(f"Kept top {len(top_docs)} documents after reranking")
         return {'filtered_results': top_docs}
     
@@ -235,11 +235,10 @@ class RagNodes:
         docs = state.get('filtered_results', [])
 
         if not docs:
-            return {'filtered_results': []}
+            return {'context_compressor_results': []}
 
         compressed_docs = []
         for doc in docs:
-            # Very short chunks don't benefit from compression
             if len(doc.text) < 200:
                 compressed_docs.append(doc)
                 continue
@@ -269,7 +268,7 @@ class RagNodes:
     def synthesizer_agent(self, state: AgentState):
         logger.info("--- SYNTHESIZING FINAL ANSWER ---")
         user_query = state['messages'][-1].content
-        results = state.get('context_compressor_results', [])
+        results = state.get('context_compressor_results') or state.get('filtered_results', [])
         if not results:
             return {'messages': [AIMessage(content='I could not find specific information in the database to answer your question.')]}
 
