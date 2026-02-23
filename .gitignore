@@ -184,3 +184,6 @@ tests/rag/results/*
 
 # other files for deepeval
 .*
+
+# evaluation matrix
+evaluation_matrix.csv

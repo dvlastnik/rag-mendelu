@@ -27,3 +27,6 @@ class SentenceTransformersLibrary(BaseDenseEmbeddingLibrary):
 
     def get_current_model(self) -> str:
         return self.model_name
+
+    def get_embedding_dim(self) -> int:
+        return self.model.get_sentence_embedding_dimension()

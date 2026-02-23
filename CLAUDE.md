@@ -17,6 +17,7 @@ uv run main.py --run-etl --path /path/to/file_or_folder           # Ingest any s
 uv run main.py --run-etl --erase --path /path/to/file_or_folder   # Erase DB then ingest
 uv run main.py --run-etl --recursive-chunking --path ...          # Use recursive instead of semantic chunking
 uv run main.py --check-dbs                                         # Check collection stats
+uv run main.py --embed-model BAAI/bge-m3 --chat                   # Use a different embedding model (fastembed or HuggingFace)
 ```
 
 **Tests:**
@@ -58,8 +59,11 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name": "Split Fiction", "category": "Co-op Adventure", "review": 9.4, "row_index": 13, "text": "name: Split Fiction | ...", ...}` — column names become metadata keys dynamically from headers, enabling Qdrant numeric/keyword filtering per dataset.
 
 **`rag/agents/`** — Agentic RAG using LangGraph
-- `AgenticRAG.chat(question)` → entry point returning `{response, sources, rewritten_query, extracted_data}`
+- `AgenticRAG(database_service, embedding_service, model_name, use_doc_summaries=False)` → main entry point
+- `AgenticRAG.chat(question)` → returns `{response, sources, rewritten_query, extracted_data}`
+- `use_doc_summaries` flag (default `False`): when `True`, enables two-stage retrieval (Stage-0 doc-summary search before chunk search); set to `False` for baseline/comparison runs
 - Graph nodes in `rag/agents/nodes/`: `general_nodes.py` (Router, General), `rag_nodes.py` (QueryRewriter, Extractor, ResearchWorker, RetrievalGrader, HallucinationGrader, Synthesizer, Error)
+- `build_graph(..., use_doc_summaries=False)` in `graph.py` passes flag to `RagNodes`
 - State is `AgentState` in `rag/agents/state.py`
 
 **`metadata_extractor/`** — Standalone LangGraph sub-graph
@@ -74,10 +78,13 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 **`text_embedding/`** — In-process embedding module (no HTTP/Docker required)
 - `TextEmbeddingService(library="fastembed", dense_model=None, sparse_model=...)` → main entry point
 - `get_embedding_with_uuid(data, chunk_size=None)` → returns `List[EmbeddingResponse]` with dense + sparse vectors
+- `get_embedding_dim()` → returns output dimensionality of the current dense model (used by `main.py` to auto-configure Qdrant)
 - `set_library("fastembed"|"sentence_transformers")` / `set_model(name)` for runtime switching
+- **Auto-detection**: when `library="fastembed"` (default) but the requested model is not in fastembed's supported list, automatically falls back to `sentence_transformers` — allows any HuggingFace model via `--embed-model`
 - Dense libraries: `fastembed` (default: `BAAI/bge-small-en-v1.5`, 384-dim) and `sentence_transformers` (default: `all-MiniLM-L6-v2`)
 - Sparse: always `fastembed` SPLADE (`prithivida/Splade_PP_en_v1`)
 - `text_embedding_api/` still exists as a standalone Dockerized FastAPI server but is no longer used by the main codebase
+- **`VECTOR_DB_VECTOR_SIZE` env var is no longer used** — vector size is auto-derived from the loaded model via `get_embedding_dim()`; must re-ingest with `--erase` when switching models
 
 **`semantic_chunking/`** — Similarity-based text splitting
 - `SimilarSentenceSplitter` → splits text by grouping sentences with high cosine similarity
@@ -110,6 +117,32 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 - `DroughtEtl` is retained for the climate dataset but `GeneralEtl` is the active default
 - Reranker in `rag_nodes.py` (`retrieval_grader_agent`) keeps top **20** docs after reranking (increased from 10); improves coverage for listing/enumeration questions
 - Re-indexing required when changing chunk parameters: `uv run main.py --run-etl --erase --path <folder>`
+
+### Document Metadata Schema
+
+Each ingested file now produces **one synthetic doc-summary point** (in addition to regular chunk points). The summary point's `text` field contains both the LLM summary sentence and the full header outline so the embedding captures both signals.
+
+**Fields on the doc-summary point** (`is_doc_summary=True`):
+- `is_doc_summary: bool` — `True` only on the synthetic summary point (one per file)
+- `doc_summary: str` — LLM one-sentence description of the document
+- `doc_headers_outline: str` — all H1–H4 headers joined by ` > `
+
+**Fields propagated to ALL chunk points** (`is_doc_summary=False`):
+- `temporal_scope_start: int | null` — first year the document covers (null if timeless/unknown)
+- `temporal_scope_end: int | null` — last year the document covers (null if timeless/unknown)
+- `is_doc_summary: bool` — always `False` on regular chunks
+
+**Two-stage retrieval** in `research_worker` (`rag_nodes.py`) — active only when `use_doc_summaries=True`:
+1. **Stage 0** — search only `is_doc_summary=True` points to find the top-5 most relevant source files
+2. **Strategy 0a** — if strict metadata filters (year/location) also exist, prepend `{source: relevant_sources, is_doc_summary: False, **strict_filter}` (confidence=0.95)
+3. **Strategy 0b** — always prepend `{source: relevant_sources, is_doc_summary: False}` (confidence=0.85) when sources found
+4. All strategies include `is_doc_summary=False` regardless of mode to keep synthetic summary points out of chunk results
+
+This eliminates cross-year and cross-domain contamination without changing the collection schema or query interface.
+
+**`use_doc_summaries` flag** — controls two-stage retrieval on/off:
+- Default is `False` (baseline mode) to allow A/B comparison against the old single-stage retrieval
+- Enable with `AgenticRAG(..., use_doc_summaries=True)` or via test `--use-doc-summaries` flag
 
 ### RAG Prompt Design
 Key rules currently in effect in `rag/agents/prompts.py` (Synthesizer node):

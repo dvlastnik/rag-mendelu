@@ -13,11 +13,11 @@ logger = get_logger(__name__)
 
 class AgenticRAG:
     def __init__(
-        self, 
-        database_service: BaseDbRepository, 
+        self,
+        database_service: BaseDbRepository,
         embedding_service: TextEmbeddingService,
-        model_name: str = "llama3.1:8b"
-    ):  
+        model_name: str = "llama3.1:8b",
+    ):
         self.agents = build_graph(database_service, embedding_service, model_name)
         
 

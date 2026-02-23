@@ -14,3 +14,8 @@ class BaseDenseEmbeddingLibrary(ABC):
     @abstractmethod
     def get_current_model(self) -> str:
         pass
+
+    @abstractmethod
+    def get_embedding_dim(self) -> int:
+        """Return the output dimensionality of the current dense model."""
+        pass

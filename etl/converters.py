@@ -4,7 +4,7 @@ from pathlib import Path
 from pandas import DataFrame, read_csv, read_excel
 
 from utils.logging_config import get_logger
-from utils.Utils import Utils
+from utils.utils import Utils
 
 logger = get_logger(__name__)
 

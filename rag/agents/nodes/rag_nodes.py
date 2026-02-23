@@ -18,7 +18,12 @@ from utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 class RagNodes:
-    def __init__(self, llm: BaseChatModel, db_repository: BaseDbRepository, embedding_service: TextEmbeddingService):
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        db_repository: BaseDbRepository,
+        embedding_service: TextEmbeddingService,
+    ):
         self.llm = llm
         self.db_repository = db_repository
         self.embedding_service = embedding_service
@@ -89,21 +94,21 @@ class RagNodes:
         target = state.get('target')
         search_text = state.get('query')
         logger.info(f"--- WORKER SEARCHING: {target}, {search_text} ---")
-        
+
         logger.info(f'Search query: {search_text}')
         try:
             response_list = self.embedding_service.get_embedding_with_uuid(data=search_text)
             if not response_list:
                 return {'search_results': [f"Error: Could not generate embeddings for query."]}
-                
+
             query_data = response_list[0]
             dense_vec = query_data.embedding
             sparse_vec = query_data.sparse
-            
+
         except Exception as e:
             logger.info(f"Worker Embedding Error: {e}")
             return {'search_results': []}
-        
+
         strategies = self._get_strategies(target)
         raw_docs = []
         used_strategy = None
@@ -362,7 +367,7 @@ class RagNodes:
     
     def _get_strategies(self, target: ExtractionScheme) -> Dict:
         strategies = []
-    
+
         valid_year = self.db_repository.validate_filter(target.year, 'years')
         valid_location = self.db_repository.validate_filter(target.location, 'locations')
         valid_entities = None
@@ -371,7 +376,7 @@ class RagNodes:
                 if self.db_repository.validate_filter(entity, 'entities'):
                     valid_entities = target.entities
                     break
-        
+
         # Strategy 1: Strict filter (highest confidence)
         strict_filter = {}
         if valid_location:
@@ -380,14 +385,14 @@ class RagNodes:
             strict_filter['years'] = [valid_year]
         if valid_entities:
             strict_filter['entities'] = valid_entities
-        
+
         if strict_filter:
             strategies.append({
                 "filter": strict_filter,
                 "name": f"Strict ({', '.join(strict_filter.keys())})",
                 "confidence": 1.0
             })
-        
+
         # Strategy 2: Relaxed filters (medium confidence)
         if len(strict_filter) > 1:
             if 'years' in strict_filter:
@@ -402,13 +407,13 @@ class RagNodes:
                     "name": "Location Only",
                     "confidence": 0.6
                 })
-        
+
         # Strategy 3: Semantic-only (low confidence, but add warning)
         strategies.append({
-            "filter": {},
+            "filter": None,
             "name": "Pure Vector Search",
             "confidence": 0.3,
             "add_warning": True if (target.year or target.location) else False
         })
-        
+
         return strategies

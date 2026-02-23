@@ -12,7 +12,7 @@ from database.base.MyDocument import MyDocument, SparseVector
 from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
 from semantic_chunking.similiar_sentence_splitter import SimilarSentenceSplitter
-from utils.Utils import Utils
+from utils.utils import Utils
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

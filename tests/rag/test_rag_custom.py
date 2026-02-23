@@ -63,8 +63,22 @@ def evaluation_logger(model_name, questions_file):
         
         total = len(session_results)
         passed = sum(1 for r in session_results if r['status'] == 'PASSED')
-        accuracy = (passed / total) * 100 if total > 0 else 0
-        
+
+        # Confusion matrix based on the two judge dimensions (threshold >= 4):
+        #   TP = relevant + faithful (PASSED)
+        #   FP = relevant but not faithful
+        #   FN = faithful but not relevant
+        #   TN = neither relevant nor faithful
+        tp = sum(1 for r in session_results if r['scores']['relevancy'] >= 4 and r['scores']['faithfulness'] >= 4)
+        fp = sum(1 for r in session_results if r['scores']['relevancy'] >= 4 and r['scores']['faithfulness'] < 4)
+        fn = sum(1 for r in session_results if r['scores']['relevancy'] < 4 and r['scores']['faithfulness'] >= 4)
+        tn = sum(1 for r in session_results if r['scores']['relevancy'] < 4 and r['scores']['faithfulness'] < 4)
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1        = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        accuracy  = (tp + tn) / total if total > 0 else 0.0
+
         final_report = {
             'metadata': {
                 'duration_seconds': round(duration, 2),
@@ -72,7 +86,10 @@ def evaluation_logger(model_name, questions_file):
                 'total_tests': total,
                 'passed': passed,
                 'failed': total - passed,
-                'accuracy_percent': round(accuracy, 2)
+                'accuracy_percent': round(accuracy * 100, 2),
+                'precision_percent': round(precision * 100, 2),
+                'recall_percent': round(recall * 100, 2),
+                'f1_percent': round(f1 * 100, 2),
             },
             'details': session_results
         }
@@ -83,7 +100,7 @@ def evaluation_logger(model_name, questions_file):
         failed_tests = []
         for report in final_report['details']:
             if report['status'] == "FAILED":
-                failed_tests.append(report['status'])
+                failed_tests.append(report)
 
         with open(failed_tests_output_path, "w") as f:
             json.dump(failed_tests, f, indent=4)

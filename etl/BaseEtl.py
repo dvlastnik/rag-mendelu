@@ -7,7 +7,7 @@ import traceback
 from typing import Type
 from database.base.BaseDbRepository import BaseDbRepository
 from etl.EtlState import ETLState
-from utils.Utils import Utils
+from utils.utils import Utils
 from utils.logging_config import get_logger, highlight_log
 from etl.converters import convert_data
 from text_embedding import TextEmbeddingService

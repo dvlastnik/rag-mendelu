@@ -11,7 +11,7 @@ from etl.GeneralEtl import GeneralEtl
 from text_embedding import TextEmbeddingService
 from rag.AgenticRAG import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
-from utils.Utils import Utils
+from utils.utils import Utils
 import constants
 
 load_dotenv()
@@ -146,6 +146,18 @@ def parse_args():
     )
 
     parser.add_argument(
+        '--embed-model',
+        type=str,
+        default=None,
+        help=(
+            'Dense embedding model name. '
+            'If the model is in fastembed\'s supported list it is used via fastembed; '
+            'otherwise sentence_transformers is tried (downloads from HuggingFace). '
+            'Defaults to BAAI/bge-small-en-v1.5 (fastembed).'
+        )
+    )
+
+    parser.add_argument(
         '--path',
         type=str,
         default='',
@@ -177,13 +189,19 @@ def main():
     args = parse_args()
 
     # Objects
-    embedding_service = TextEmbeddingService()
+    embedding_service = TextEmbeddingService(dense_model=args.embed_model)
+    vector_size = embedding_service.get_embedding_dim()
+    logger.info(
+        f"Embedding model: {embedding_service.get_current_model()} "
+        f"(library: {embedding_service.get_library()}, dim: {vector_size})"
+    )
+
     db_repository = QdrantDbRepository(
-        ip='localhost', 
+        ip='localhost',
         port=6333,
         collection_name=os.environ.get("COLLECTION_NAME", "default_name"),
         metadata={
-            'vector_size': int(os.environ.get("VECTOR_DB_VECTOR_SIZE", 384)),
+            'vector_size': vector_size,
             'distance': str(os.environ.get("VECTOR_DB_DISTANCE", "DOT"))
         }
     )

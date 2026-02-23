@@ -1,5 +1,4 @@
 from langgraph.graph import StateGraph, START, END
-#from langchain.chat_models import init_chat_model
 from langchain_ollama import ChatOllama
 
 from rag.agents.state import AgentState
@@ -13,14 +12,18 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-def build_graph(database_service: BaseDbRepository, embedding_service: TextEmbeddingService, model_name: str = 'ibm/granite4:3b'):
+def build_graph(
+    database_service: BaseDbRepository,
+    embedding_service: TextEmbeddingService,
+    model_name: str = 'ibm/granite4:3b',
+):
     llm = ChatOllama(
         model=model_name,
         temperature=0,
-        num_ctx=8192, 
+        num_ctx=8192,
         keep_alive='5m'
     )
-    
+
     router_nodes = GeneralNodes(llm)
     rag_nodes = RagNodes(llm, database_service, embedding_service)
 

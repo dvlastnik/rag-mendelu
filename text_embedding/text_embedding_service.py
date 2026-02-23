@@ -4,7 +4,7 @@ from typing import List
 from text_embedding.base import BaseDenseEmbeddingLibrary
 from text_embedding.models import EmbeddingResponse
 from text_embedding.sparse_library import SparseEmbeddingLibrary
-from utils.Utils import Utils
+from utils.utils import Utils
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -19,9 +19,8 @@ class TextEmbeddingService:
         dense_model: str | None = None,
         sparse_model: str = "prithivida/Splade_PP_en_v1",
     ):
-        self._dense_library: BaseDenseEmbeddingLibrary = self._init_dense_library(library, dense_model)
+        self._dense_library, self._library_name = self._init_dense_library(library, dense_model)
         self._sparse_library = SparseEmbeddingLibrary(model_name=sparse_model)
-        self._library_name = library
 
     def get_embedding_with_uuid(
         self,
@@ -48,14 +47,17 @@ class TextEmbeddingService:
     def set_library(self, library: str):
         if library not in LIBRARIES:
             raise ValueError(f"Unknown library '{library}'. Choose from: {LIBRARIES}")
-        self._dense_library = self._init_dense_library(library, dense_model=None)
-        self._library_name = library
+        self._dense_library, self._library_name = self._init_dense_library(library, dense_model=None)
 
     def get_current_model(self) -> str:
         return self._dense_library.get_current_model()
 
     def get_library(self) -> str:
         return self._library_name
+
+    def get_embedding_dim(self) -> int:
+        """Return the output dimensionality of the current dense embedding model."""
+        return self._dense_library.get_embedding_dim()
 
     def _embed_batch(self, texts: List[str]) -> List[EmbeddingResponse]:
         dense_vectors = self._dense_library.encode(texts)
@@ -71,11 +73,30 @@ class TextEmbeddingService:
         ]
 
     @staticmethod
-    def _init_dense_library(library: str, dense_model: str | None) -> BaseDenseEmbeddingLibrary:
+    def _init_dense_library(
+        library: str, dense_model: str | None
+    ) -> tuple[BaseDenseEmbeddingLibrary, str]:
+        """Return (library_instance, actual_library_name).
+
+        When library='fastembed' but the requested model is not in fastembed's
+        supported list, automatically falls back to sentence_transformers so any
+        HuggingFace model can be used without an explicit --embed-library flag.
+        """
+        from text_embedding.fastembed_library import FastEmbedLibrary
+        from text_embedding.fastembed_library import DEFAULT_MODEL as FASTEMBED_DEFAULT
+        from text_embedding.sentence_transformers_library import SentenceTransformersLibrary
+        from text_embedding.sentence_transformers_library import DEFAULT_MODEL as ST_DEFAULT
+
         if library == "fastembed":
-            from text_embedding.fastembed_library import FastEmbedLibrary, DEFAULT_MODEL
-            return FastEmbedLibrary(model_name=dense_model or DEFAULT_MODEL)
+            if dense_model and not FastEmbedLibrary.is_model_supported(dense_model):
+                logger.info(
+                    f"Model '{dense_model}' not found in fastembed. "
+                    "Falling back to sentence_transformers."
+                )
+                return SentenceTransformersLibrary(model_name=dense_model), "sentence_transformers"
+            return FastEmbedLibrary(model_name=dense_model or FASTEMBED_DEFAULT), "fastembed"
+
         if library == "sentence_transformers":
-            from text_embedding.sentence_transformers_library import SentenceTransformersLibrary, DEFAULT_MODEL
-            return SentenceTransformersLibrary(model_name=dense_model or DEFAULT_MODEL)
+            return SentenceTransformersLibrary(model_name=dense_model or ST_DEFAULT), "sentence_transformers"
+
         raise ValueError(f"Unknown library '{library}'. Choose from: {LIBRARIES}")
