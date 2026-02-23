@@ -129,19 +129,21 @@ for i in range(0, len(pairs), 2):
         continue
     with open(path) as f:
         meta = json.load(f)['metadata']
+        ml_metrics = meta['ml_metrics']
     rows.append({
         'model':             model,
-        'accuracy_percent':  meta.get('accuracy_percent',  ''),
-        'precision_percent': meta.get('precision_percent', ''),
-        'recall_percent':    meta.get('recall_percent',    ''),
-        'f1_percent':        meta.get('f1_percent',        ''),
+        'success_rate':      meta.get('success_rate', '')
+        'accuracy_percent':  ml_metrics.get('accuracy_percent',  ''),
+        'precision_percent': ml_metrics.get('precision_percent', ''),
+        'recall_percent':    ml_metrics.get('recall_percent',    ''),
+        'f1_percent':        ml_metrics.get('f1_percent',        ''),
         'duration_minutes':  meta.get('duration_minutes',  ''),
     })
 
 out = 'evaluation_matrix.csv'
 with open(out, 'w', newline='') as f:
     w = csv.DictWriter(f, fieldnames=[
-        'model', 'accuracy_percent', 'precision_percent',
+        'model', 'success_rate', 'accuracy_percent', 'precision_percent',
         'recall_percent', 'f1_percent', 'duration_minutes',
     ])
     w.writeheader()

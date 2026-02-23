@@ -86,10 +86,13 @@ def evaluation_logger(model_name, questions_file):
                 'total_tests': total,
                 'passed': passed,
                 'failed': total - passed,
-                'accuracy_percent': round(accuracy * 100, 2),
-                'precision_percent': round(precision * 100, 2),
-                'recall_percent': round(recall * 100, 2),
-                'f1_percent': round(f1 * 100, 2),
+                'success_rate': round(passed / total, 2),
+                'ml_metrics': {
+                    'accuracy_percent': round(accuracy * 100, 2),
+                    'precision_percent': round(precision * 100, 2),
+                    'recall_percent': round(recall * 100, 2),
+                    'f1_percent': round(f1 * 100, 2),
+                }
             },
             'details': session_results
         }
