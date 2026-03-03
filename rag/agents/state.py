@@ -14,9 +14,11 @@ class AgentState(TypedDict):
     rewritten_queries: List[str]
     search_results: Annotated[list, operator.add]
     filtered_results: List[MyDocument]
-    context_compressor_results: List[MyDocument]
+    context_compressor_results: Annotated[list, operator.add]
     hallucination_status: str
     hallucination_retries: int
+    retrieval_iterations: int
+    gap_follow_up_query: str
     
 class WorkerState(TypedDict):
     target: ExtractionScheme

@@ -84,7 +84,7 @@ def check_databases(db_repository: BaseDbRepository):
     db_repository.logger.info(f'Metadata from database: {db_repository.valid_metadata}')
     db_repository.close()
 
-def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository):
+def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, model_name: str):
     """
     Starts the RAG chat mode.
     """
@@ -95,7 +95,7 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
         logger.error(f"Failed to connect to ChromaDB for RAG: {connect_result.message}")
         return
 
-    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service)
+    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name)
 
     # question = "The report explicitly states that the Greenland Ice Sheet lost approximately 85 Gt of ice in 2022. What was the specific total mass balance loss (in Gigatonnes) for the Antarctic Ice Sheet reported for the same period?"
     print("Assitant ready. Type 'exit' to end program.")
@@ -112,6 +112,9 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
             print(f' Source Text: {source.text}')
             print(f'-----------------------')
         print('//////////////////////////////////')
+        for index, compress in enumerate(result['compressor_results']):
+            print(f'Compressor result [{index}]: {compress.text}')
+        print('----------------------------------')
         print(f'Assistant: {result['response']}')
         print('----------------------------------')
 
@@ -124,6 +127,13 @@ def parse_args():
         default='chroma',
         choices=['chroma', 'qdrant'],
         help='Type of vector database to use'
+    )
+
+    parser.add_argument(
+        '--model',
+        type=str,
+        default='llama3.1:8b',
+        help='LLM name'
     )
 
     parser.add_argument(
@@ -219,10 +229,10 @@ def main():
     elif args.check_dbs:
         check_databases(db_repository)
     elif args.chat:
-        run_rag_chat(embedding_service, db_repository)
+        run_rag_chat(embedding_service, db_repository, args.model)
     else:
         logger.info("No ETL or DB check specified. Running RAG chat mode by default.")
-        run_rag_chat(embedding_service, db_repository)
+        run_rag_chat(embedding_service, db_repository, args.model)
 
     # Close dbs
     db_repository.close()

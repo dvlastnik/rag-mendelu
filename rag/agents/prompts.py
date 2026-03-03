@@ -158,6 +158,29 @@ A: Swiss glaciers lost about 10% of their remaining volume in two years [1]. The
 """
 
     @staticmethod
+    def get_gap_checker_prompt() -> str:
+        return """You are a research gap analyzer.
+
+Your job: decide whether the provided context contains enough information to fully answer the user's question.
+
+RULES:
+1. If the context covers ALL key aspects needed to answer the question, set is_sufficient = true and follow_up_query = "".
+2. If important facts, numbers, entities, or sub-questions are clearly missing, set is_sufficient = false.
+3. When is_sufficient = false, write a follow_up_query — a SHORT sequence of 2-6 keywords/proper nouns targeting the specific missing fact in the database.
+4. The follow_up_query must NOT repeat the original question — it must target only what is still missing.
+5. If the context is partially relevant but enough to give a reasonable answer, prefer is_sufficient = true.
+6. DO NOT use any markdown syntax for follow_up_query.
+
+CRITICAL RULES FOR follow_up_query:
+- It is a vector database search query — use ONLY keywords, proper nouns, and technical terms.
+- NO question words: never start with What, Who, Where, When, How, Which, Why.
+- NO references to "the context", "the document", "the list", "provided", "mentioned" — the follow_up_query must stand alone as a search string.
+- BAD:  "What is the name of the fourth band in the Big Four list in the context?"
+- BAD:  "Which band is missing from the provided list?"
+- GOOD: "Pakistan flood casualties 2022 death toll"
+"""
+
+    @staticmethod
     def get_hallucination_grader_agent() -> str:
         return """You are a grader assessing whether an LLM generation is grounded in / supported by a set of retrieved facts.
 

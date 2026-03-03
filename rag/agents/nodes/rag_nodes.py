@@ -8,7 +8,7 @@ import difflib
 
 from database.base.MyDocument import MyDocument
 from rag.agents.state import AgentState, WorkerState
-from rag.agents.models import MultiQuery, GradeDocumentsBatch, GradeHallucinations, ExtractionScheme
+from rag.agents.models import MultiQuery, GradeDocumentsBatch, GradeHallucinations, ExtractionScheme, GapCheck
 from rag.agents.enums import NodeName
 from rag.agents.prompts import Prompts
 from database.base.BaseDbRepository import BaseDbRepository
@@ -113,7 +113,7 @@ class RagNodes:
         raw_docs = []
         used_strategy = None
         n_results = 50
-        sufficient_results = 15  # stop early when a confident strategy finds enough
+        sufficient_results = 10
 
         for strategy in strategies:
             logger.info(f"Trying Strategy: {strategy['name']}")
@@ -229,7 +229,7 @@ class RagNodes:
             for result in sorted(reranked_results, key=lambda x: x['score'], reverse=True)
         ]
         
-        top_docs = sorted_docs[:20]
+        top_docs = sorted_docs[:10]
 
         logger.info(f"Kept top {len(top_docs)} documents after reranking")
         return {'filtered_results': top_docs}
@@ -256,6 +256,13 @@ class RagNodes:
                 if not compressed_text or len(compressed_text) < 20:
                     compressed_docs.append(doc)
                     continue
+                # Verify the compressed text is actually derived from the original
+                # (not hallucinated). If similarity is too low, keep the original.
+                similarity = difflib.SequenceMatcher(None, doc.text.lower(), compressed_text.lower()).ratio()
+                if similarity < 0.15:
+                    logger.warning(f"Compressor output for doc {doc.id} looks hallucinated (similarity={similarity:.2f}), keeping original")
+                    compressed_docs.append(doc)
+                    continue
                 compressed_docs.append(MyDocument(
                     id=doc.id,
                     text=compressed_text,
@@ -273,9 +280,17 @@ class RagNodes:
     def synthesizer_agent(self, state: AgentState):
         logger.info("--- SYNTHESIZING FINAL ANSWER ---")
         user_query = state['messages'][-1].content
-        results = state.get('context_compressor_results') or state.get('filtered_results', [])
-        if not results:
+        raw_results = state.get('context_compressor_results') or state.get('filtered_results', [])
+        if not raw_results:
             return {'messages': [AIMessage(content='I could not find specific information in the database to answer your question.')]}
+
+        # Deduplicate accumulated results (same doc may appear across gap iterations)
+        seen_ids: set = set()
+        results = []
+        for doc in raw_results:
+            if doc.id not in seen_ids:
+                seen_ids.add(doc.id)
+                results.append(doc)
 
         doc_texts = []
         for i, doc in enumerate(results, 1):
@@ -298,8 +313,16 @@ class RagNodes:
     def hallucination_grader_agent(self, state: AgentState):
         logger.info("--- CHECKING FOR HALLUCINATIONS ---")
         current_retries = state.get('hallucination_retries', 0)
-        documents = state.get('context_compressor_results', [])
+        raw_documents = state.get('context_compressor_results', [])
         generated_answer = state['messages'][-1].content
+
+        # Deduplicate accumulated results
+        seen_ids: set = set()
+        documents = []
+        for doc in raw_documents:
+            if doc.id not in seen_ids:
+                seen_ids.add(doc.id)
+                documents.append(doc)
 
         doc_texts = []
         for doc in documents:
@@ -325,7 +348,7 @@ class RagNodes:
                 'hallucination_retries': current_retries + 1
             }
 
-    def error_agent(self, state: AgentState):
+    def error_agent(self, state: AgentState):  # noqa: ARG002
         logger.info("--- ERROR ---")
         return {'messages': [AIMessage(content='I could not process your request. Please try to be more specific with your question.')]}
 
@@ -347,6 +370,75 @@ class RagNodes:
             for q in queries
         ]
     
+    MAX_GAP_ITERATIONS = 3
+
+    def gap_checker_agent(self, state: AgentState):
+        logger.info("--- GAP CHECKER ---")
+        question = state['messages'][-1].content
+        prev_query = state.get('gap_follow_up_query', '')
+        iterations = state.get('retrieval_iterations', 0)
+
+        # Deduplicate accumulated context before evaluating
+        raw_docs = state.get('context_compressor_results', [])
+        seen_ids: set = set()
+        docs = []
+        for doc in raw_docs:
+            if doc.id not in seen_ids:
+                seen_ids.add(doc.id)
+                docs.append(doc)
+
+        if not docs:
+            logger.info("No context available — marking as insufficient.")
+            return {
+                'retrieval_iterations': iterations + 1,
+                'gap_follow_up_query': question,
+            }
+
+        context = "\n\n".join(
+            f"[{i + 1}] {doc.text}" for i, doc in enumerate(docs)
+        )
+
+        prev_note = (
+            f"\nAlready searched for: '{prev_query}' — generate a DIFFERENT query targeting a different angle."
+            if prev_query else ""
+        )
+
+        try:
+            gap_llm = self.llm.with_structured_output(GapCheck)
+            result = cast(GapCheck, gap_llm.invoke([
+                SystemMessage(content=Prompts.get_gap_checker_prompt()),
+                HumanMessage(content=f"Question: {question}{prev_note}\n\nAvailable context:\n{context}"),
+            ]))
+
+            follow_up = result.follow_up_query if not result.is_sufficient else ''
+
+            # If the model generates the same query as last time, stop — it won't find anything new
+            if follow_up and follow_up.strip().lower() == prev_query.strip().lower():
+                logger.info("Gap checker repeated the previous query — treating as sufficient to avoid infinite loop.")
+                follow_up = ''
+
+            logger.info(f"Gap check: sufficient={result.is_sufficient} | follow_up='{follow_up}'")
+            return {
+                'retrieval_iterations': iterations + 1,
+                'gap_follow_up_query': follow_up,
+            }
+        except Exception as e:
+            logger.warning(f"Gap check failed ({e}), treating as sufficient.")
+            return {'retrieval_iterations': iterations + 1, 'gap_follow_up_query': ''}
+
+    @staticmethod
+    def route_gap_check(state: AgentState):
+        iterations = state.get('retrieval_iterations', 0)
+        follow_up = state.get('gap_follow_up_query', '')
+
+        if not follow_up or iterations >= RagNodes.MAX_GAP_ITERATIONS:
+            logger.info(f"Gap check → SYNTHESIZER (iterations={iterations}, follow_up='{follow_up}')")
+            return NodeName.SYNTHESIZER
+
+        logger.info(f"Gap check → RESEARCH_WORKER with query: '{follow_up}' (iteration {iterations})")
+        dummy_target = ExtractionScheme(location=None, year=None, entities=None)
+        return [Send(NodeName.RESEARCH_WORKER, {'target': dummy_target, 'query': follow_up})]
+
     @staticmethod
     def route_hallucination(state: AgentState) -> Literal[NodeName.SYNTHESIZER, END]: # type: ignore
         MAX_RETRIES = 2

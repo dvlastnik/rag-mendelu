@@ -43,3 +43,13 @@ class GradeHallucinations(BaseModel):
         ...,
         description="Answer is grounded in the facts, 'yes' or 'no'"
     )
+
+class GapCheck(BaseModel):
+    is_sufficient: bool = Field(
+        ...,
+        description="True if the context fully answers the question; false if key facts are still missing."
+    )
+    follow_up_query: str = Field(
+        ...,
+        description="Focused keyword query targeting the specific missing information. Empty string if is_sufficient is true."
+    )

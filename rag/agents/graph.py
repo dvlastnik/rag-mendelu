@@ -36,6 +36,7 @@ def build_graph(
     builder.add_node(NodeName.RESEARCH_WORKER, rag_nodes.research_worker)
     builder.add_node(NodeName.RETRIEVAL_GRADER_AGENT, rag_nodes.retrieval_grader_agent)
     builder.add_node(NodeName.CONTEXT_COMPRESSOR, rag_nodes.context_compressor_agent)
+    builder.add_node(NodeName.GAP_CHECKER, rag_nodes.gap_checker_agent)
     builder.add_node(NodeName.HALLUCINATION_GRADER_AGENT, rag_nodes.hallucination_grader_agent)
     builder.add_node(NodeName.SYNTHESIZER, rag_nodes.synthesizer_agent)
     builder.add_node(NodeName.ERROR, rag_nodes.error_agent)
@@ -58,7 +59,12 @@ def build_graph(
 
     builder.add_edge(NodeName.RESEARCH_WORKER, NodeName.RETRIEVAL_GRADER_AGENT)
     builder.add_edge(NodeName.RETRIEVAL_GRADER_AGENT, NodeName.CONTEXT_COMPRESSOR)
-    builder.add_edge(NodeName.CONTEXT_COMPRESSOR, NodeName.SYNTHESIZER)
+    builder.add_edge(NodeName.CONTEXT_COMPRESSOR, NodeName.GAP_CHECKER)
+    builder.add_conditional_edges(
+        NodeName.GAP_CHECKER,
+        RagNodes.route_gap_check,
+        path_map={NodeName.SYNTHESIZER: NodeName.SYNTHESIZER, NodeName.RESEARCH_WORKER: NodeName.RESEARCH_WORKER}
+    )
     builder.add_edge(NodeName.SYNTHESIZER, NodeName.HALLUCINATION_GRADER_AGENT)
 
     builder.add_conditional_edges(

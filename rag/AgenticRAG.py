@@ -18,6 +18,7 @@ class AgenticRAG:
         embedding_service: TextEmbeddingService,
         model_name: str = "llama3.1:8b",
     ):
+        logger.info(f"Agentic RAG configured with {model_name}")
         self.agents = build_graph(database_service, embedding_service, model_name)
         
 

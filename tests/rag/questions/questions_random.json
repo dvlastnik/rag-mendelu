@@ -1,0 +1,212 @@
+[
+    {
+        "id": 1,
+        "question": "What band is most credited with creating the first true heavy metal record, what city were they from, and what year was their debut album released?",
+        "response": "Black Sabbath is most credited with crystallizing the heavy metal sound. They were formed in Birmingham, England in 1968. Their 1970 self-titled debut album, Black Sabbath, is widely considered the first true heavy metal record.",
+        "source": "history_of_metal.md",
+        "difficulty": "easy"
+    },
+    {
+        "id": 2,
+        "question": "Who were the 'Big Four' of thrash metal?",
+        "response": "The Big Four of thrash metal were: Metallica (formed in Los Angeles in 1981), Slayer (known for Reign in Blood, 1986), Megadeth (founded by ex-Metallica guitarist Dave Mustaine), and Anthrax (who added a New York energy and were among the first to blend hip-hop into their sound).",
+        "source": "history_of_metal.md",
+        "difficulty": "easy"
+    },
+    {
+        "id": 3,
+        "question": "What review score did Split Fiction receive in the 2025 games list, what category is it, and which studio made it?",
+        "response": "Split Fiction received a review score of 9.4. It is in the Co-op Adventure category and was made by Hazelight Studios. It is described as a co-op masterpiece following two writers trapped in their own fictional worlds.",
+        "source": "games_2025.csv",
+        "difficulty": "easy"
+    },
+    {
+        "id": 4,
+        "question": "Which games in the 2025 list share the highest review score, what score is it, and what categories are they in?",
+        "response": "Two games share the highest review score of 9.5: Balatro (Console Expansion), a Card Roguelite described as a massively acclaimed poker-inspired roguelite expanding with new jokers and gameplay modes, and Hollow Knight: Silksong, an Action Platformer following Hornet on a pilgrimage to a new mysterious kingdom.",
+        "source": "games_2025.csv",
+        "difficulty": "easy"
+    },
+    {
+        "id": 5,
+        "question": "What sparked the Hussite Wars, and what exactly happened at the Defenestration of Prague in 1419?",
+        "response": "The Hussite Wars were sparked by the execution of Jan Hus. Despite a safe-conduct guarantee from Emperor Sigismund, Hus was arrested by the Council of Constance, tried for heresy, and burned at the stake on July 6, 1415, igniting fury across Bohemia. The Defenestration of Prague occurred in 1419 when Hussite crowds stormed the New Town Hall and threw Catholic councillors from the windows. This act directly sparked the Hussite Wars that lasted fifteen years.",
+        "source": "hussite_wars.pptx",
+        "difficulty": "easy"
+    },
+    {
+        "id": 6,
+        "question": "How many eyes did Jan Žižka lose, how did he lose each one, and what is remarkable about his military record despite this?",
+        "response": "Jan Žižka lost both of his eyes. He lost his left eye in battle during early campaigns, and later lost his right eye to an arrow at the siege of Rabi in 1421, making him completely blind. Despite this, he became history's most celebrated blind military commander and never lost a single battle in his entire military career.",
+        "source": "hussite_wars.pptx",
+        "difficulty": "easy"
+    },
+    {
+        "id": 7,
+        "question": "What is 'eucatastrophe' as defined by Tolkien in the LOTR document, and what does he consider the supreme example of it in The Lord of the Rings?",
+        "response": "Tolkien coined the word eucatastrophe to describe the sudden, unforeseeable turn for the good — the joyous reversal that cannot be logically derived from what came before. He argued it is the distinguishing feature of the best fairy-stories. The supreme eucatastrophe in The Lord of the Rings is Gollum's fall into the fire at the Crack of Doom. Gollum bites the Ring from Frodo's finger and falls into the fire, destroying the Ring and Sauron at the very moment all seemed lost. Tolkien identifies this as the fruit of mercy shown to Gollum long ago — first by Bilbo, then by Frodo — and associates this narrative structure with the Christian Gospel itself.",
+        "source": "lotr_lore.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 8,
+        "question": "Who are the Valar according to the LOTR document, and name at least four of them with their domains or roles?",
+        "response": "The Valar are the closest thing Middle-earth has to gods — angelic beings (Ainur) who descended into the world to shape it, serving Eru Ilúvatar. There are fourteen Valar (seven Lords and seven Queens). Key examples: Manwë is the lord of the Valar, King of Arda, master of winds and sky; Varda (called Elbereth by the Elves) is the Lady of the Stars; Aulë is the smith of the Valar, master of craft, who made the Dwarves in secret; Ulmo is the Lord of Waters; Yavanna is the Giver of Fruits, who created the Two Trees of Valinor; Mandos is the Keeper of the Dead; and Melkor (later Morgoth) was the greatest Valar in power who chose to rebel.",
+        "source": "lotr_lore.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 9,
+        "question": "What was the New Wave of British Heavy Metal (NWOBHM), when did it emerge, and which bands defined it?",
+        "response": "The New Wave of British Heavy Metal (NWOBHM) emerged in the late 1970s through the early 1980s. It was a movement born partly from punk rock's energy and DIY spirit that invigorated a new generation of British metal musicians. The result was a sound that was faster, more aggressive, and more technically ambitious than earlier metal. Key bands included Iron Maiden (formed in London in 1975), Def Leppard (in their early years), Saxon, Diamond Head, and Venom. Iron Maiden became the movement's most iconic act; their 1982 album The Number of the Beast is one of the most celebrated metal albums ever recorded. Venom introduced the terms 'black metal' and 'death metal' with albums like Welcome to Hell (1981) and Black Metal (1982).",
+        "source": "history_of_metal.md",
+        "difficulty": "easy"
+    },
+    {
+        "id": 10,
+        "question": "What were the Four Articles of Prague that the Hussites demanded?",
+        "response": "The Four Articles of Prague were the core demands of the Hussite movement: I) Freedom to Preach — the Word of God shall be freely preached by Christian priests throughout the Kingdom of Bohemia without hindrance; II) Communion in Both Kinds — the Eucharist shall be given to all faithful Christians including laity in both kinds: bread AND wine (sub utraque specie); III) Poverty of the Clergy — the secular power of the clergy shall be removed and priests must not possess worldly goods, dominions, or secular authority; IV) Punishment of Public Sins — all mortal sins including simony and corruption shall be prohibited and punished for the cleansing of the Bohemian nation.",
+        "source": "hussite_wars.pptx",
+        "difficulty": "easy"
+    },
+    {
+        "id": 11,
+        "question": "List all the major subgenres of metal mentioned in the history document, the approximate decade or era they emerged, and at least one key band for each.",
+        "response": "Major metal subgenres mentioned: Classic heavy metal (late 1960s–early 1970s) — Black Sabbath, Led Zeppelin, Deep Purple; Hard rock/proto-metal (1970s) — Judas Priest, Alice Cooper, KISS, Rush, Aerosmith; NWOBHM (late 1970s–early 1980s) — Iron Maiden, Saxon, Venom; Glam metal / hair metal (1980s) — Mötley Crüe, Bon Jovi, Poison; Thrash metal (early 1980s) — Metallica, Slayer, Megadeth, Anthrax; Death metal (mid-to-late 1980s) — Death, Possessed, Morbid Angel, Cannibal Corpse; Doom metal (mid-to-late 1980s) — Candlemass, Saint Vitus; Black metal / Norwegian scene (early 1990s) — Mayhem, Burzum, Darkthrone, Emperor, Immortal; Groove metal (mid-1990s) — Pantera; Alternative metal (mid-1990s) — Tool, Faith No More, Rage Against the Machine; Nu-metal (late 1990s–2000s) — Korn, Linkin Park, Slipknot, System of a Down; Metalcore (mid-2000s) — Killswitch Engage, Bullet for My Valentine; Djent (2010s) — Meshuggah, Periphery; Progressive metal (2010s) — Dream Theater; Classic doom / stoner metal revival (2010s) — Sleep, Electric Wizard; Deathcore (2020s) — Lorna Shore, Knocked Loose.",
+        "source": "history_of_metal.md",
+        "difficulty": "medium"
+    },
+    {
+        "id": 12,
+        "question": "List all Action RPG games from the 2025 games list along with their review scores, sorted from highest to lowest score.",
+        "response": "Action RPG games in the 2025 list sorted by score (highest to lowest): Monster Hunter Wilds — 9.2; Kingdom Come: Deliverance 2 — 9.1; Nier Automata 2 — 9.0; Hogwarts Legacy 2 — 8.5; Fable — 8.2; Granblue Fantasy Relink 2 — 8.1; Assassin's Creed Shadows — 8.0; Wuchang: Fallen Feathers — 8.0; The First Berserker: Khazan — 7.8; Eternal Strands — 7.7; Tainted Grail: The Fall of Avalon — 7.6; Mandragora: Whispers of the Witch Tree — 7.5.",
+        "source": "games_2025.csv",
+        "difficulty": "medium"
+    },
+    {
+        "id": 13,
+        "question": "Describe in detail how the Wagenburg (wagon fortress) worked according to the Hussite Wars presentation, including its composition and why it revolutionized medieval warfare.",
+        "response": "The Wagenburg was Jan Žižka's defining tactical invention. Heavy farm wagons were chained side-by-side, wheels to wheels, with gaps between wagons covered by wooden shields (pavises). Crossbowmen and handgunners fired through holes in the wagon sides, while artillery (small cannons) was positioned at the wagons' corners. Pikemen and flailmen waited inside to repel anyone who broke through, and cavalry was positioned outside for counter-attacks after enemy repulsion. It revolutionized warfare because knights became obsolete against wagon forts — cavalry charges were suicidal. Peasants with minimal training could defeat professional knights. It combined ranged, melee, and artillery in a single defensive structure. The concept influenced European military thinking for decades and is considered a direct ancestor of later laager tactics. Žižka also codified the first written military doctrine for its use.",
+        "source": "hussite_wars.pptx",
+        "difficulty": "medium"
+    },
+    {
+        "id": 14,
+        "question": "Who are the five Wizards (Istari) of Middle-earth according to the LOTR document? Describe their original Maia identities and what happened to each of them.",
+        "response": "The five Wizards are Maiar who took mortal form to assist free peoples against Sauron: Gandalf the Grey (originally Olórin, a Maia of Manwë and Varda, associated with pity and wisdom) — died fighting the Balrog of Moria after a ten-day battle and was sent back as Gandalf the White with greater power; Saruman the White (originally Curunír, a Maia of Aulë, most skilled in craft and lore) — was the head of the order but was corrupted through studying the One Ring's lore and using a palantír, betrayed the free peoples, bred Uruk-hai, allied with Sauron, was stripped of power, and was ultimately murdered by his servant Gríma Wormtongue; Radagast — mentioned but with little detail; the two Blue Wizards, named Alatar and Pallando (later Morinehtar and Rómestámo) — mentioned briefly with little further detail. All five were forbidden to use their power to dominate or rule.",
+        "source": "lotr_lore.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 15,
+        "question": "What are the three breeds of Hobbits described in the LOTR document, and what are the distinguishing characteristics and notable families or individuals of each?",
+        "response": "The three breeds of Hobbits are: Harfoots — the most common breed, who settled the Shire; Stoors — broader and more mannish than other Hobbits, who lived near rivers (Sméagol/Gollum was a Stoor); and Fallohides — taller and fairer than the others, more friendly with Elves and adventurous by Hobbit standards. The Took and Brandybuck families are of Fallohide descent.",
+        "source": "lotr_lore.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 16,
+        "question": "What are all the Metallica albums mentioned in the metal history document, their release years, and the significance attributed to each?",
+        "response": "Metallica albums mentioned in the document: Kill 'Em All (1983) — one of the albums that established them as titans of thrash metal; Master of Puppets (1986) — another album that cemented their titan status; ...And Justice for All (1988) — described as genre-defining; the self-titled Black Album (1991) — brought them to global superstardom; 72 Seasons (2023) — debuted at number one in multiple countries, reminding audiences that metal's original titans still command massive audiences.",
+        "source": "history_of_metal.md",
+        "difficulty": "medium"
+    },
+    {
+        "id": 17,
+        "question": "List all games from the 2025 list that received a review score of 9.0 or above, along with their categories and scores.",
+        "response": "Games scoring 9.0 or above in the 2025 list: Balatro (Console Expansion) — Card Roguelite, 9.5; Hollow Knight: Silksong — Action Platformer, 9.5; Stardew Valley 1.7 — Life Sim, 9.3; Metroid Prime 4: Beyond — Action Adventure, 9.3; Astro Bot 2 — Platformer, 9.2; Monster Hunter Wilds — Action RPG, 9.2; Hades 3 — Roguelite, 9.2; Slay the Spire 2 — Card Roguelite, 9.1; Doom: The Dark Ages — FPS, 9.1; Kingdom Come: Deliverance 2 — Action RPG, 9.1; The Legend of Zelda: Echoes of Wisdom — Action Adventure, 9.1; Clair Obscur: Expedition 33 — Turn-Based RPG, 9.0; Mario Kart World — Racing, 9.0; Ghost of Yotei — Action Adventure, 9.0; Nier Automata 2 — Action RPG, 9.0.",
+        "source": "games_2025.csv",
+        "difficulty": "medium"
+    },
+    {
+        "id": 18,
+        "question": "Describe all five anti-Hussite Crusades called against Bohemia according to the presentation, including their dates and outcomes.",
+        "response": "All five anti-Hussite Crusades failed: 1st Crusade (1420) — Hussite victory at the Battle of Vítkov Hill; Žižka's wagons repulsed a massive Catholic force; 2nd Crusade (1421) — Crusaders routed near Žatec; Sigismund's forces refused to engage the Hussite wagons; 3rd Crusade (1422) — Catastrophic Catholic defeat at Německý Brod, with large numbers of crusaders drowning while fleeing over the Sázava river; 4th Crusade (1427) — The crusade collapsed before battle even began; Catholic armies fled upon hearing Hussite war hymns; 5th Crusade (1431) — Battle of Domažlice; crusaders panicked and fled at the sound of Hussite trumpets and singing. Pope Martin V and Emperor Sigismund called all five crusades.",
+        "source": "hussite_wars.pptx",
+        "difficulty": "medium"
+    },
+    {
+        "id": 19,
+        "question": "Describe Gollum's complete role across both The Hobbit and The Lord of the Rings as explained in the LOTR document, including his relationship with the One Ring and his ultimate significance.",
+        "response": "Gollum (originally Sméagol) killed his cousin Déagol to take the One Ring within minutes of seeing it, then bore it for nearly five hundred years, becoming a wretched cave-dwelling creature extended far beyond his natural lifespan. In The Hobbit, Bilbo encounters him under the Misty Mountains after finding the Ring on the cave floor. They play a riddle game; Bilbo wins but Gollum blocks his escape. Bilbo uses the Ring's invisibility to leap over Gollum and escape. Crucially, Bilbo has the chance to kill Gollum but shows pity instead — which Gandalf later identifies as the most important moment in the history of the Ring. In The Lord of the Rings, Gollum becomes Frodo and Sam's guide through the Dead Marshes toward Mordor. He is psychologically torn between 'Sméagol' (his pitiable self, genuinely responding to Frodo's mercy) and 'Gollum' (his treacherous Ring-obsessed self). He leads them treacherously into Shelob's lair. At the Crack of Doom, when Frodo claims the Ring rather than destroying it, Gollum attacks, bites the Ring from Frodo's finger, and falls into the fire with it, accidentally destroying the Ring and Sauron. The mercy shown to Gollum — first by Bilbo, then by Frodo — is what ultimately saves the world.",
+        "source": "lotr_lore.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 20,
+        "question": "How did nu-metal emerge in the late 1990s and 2000s according to the metal history document, which bands defined it, and how was it received?",
+        "response": "Nu-metal became a global phenomenon at the turn of the millennium by blending heavy guitar riffs with hip-hop rhythms, rap vocals, and deeply personal lyrics about alienation and trauma. Key bands included Korn, Limp Bizkit, Linkin Park, Slipknot, Disturbed, and System of a Down. Linkin Park's Hybrid Theory (2000) became one of the best-selling albums of the decade. Slipknot brought extreme metal aggression and theatrical masks into the mainstream. Nu-metal was often criticized by metal purists but introduced millions of young fans to heavy music and remains a defining cultural touchstone for an entire generation.",
+        "source": "history_of_metal.md",
+        "difficulty": "medium"
+    },
+    {
+        "id": 21,
+        "question": "Kingdom Come: Deliverance 2 is set in 15th-century Bohemia and has a review score of 9.1. The Hussite Wars took place in Bohemia from 1419 to 1434. What do both sources tell us about this historical period and location, and name three specific events from the Hussite Wars that could form the backdrop of a game set in that era?",
+        "response": "According to the games list, Kingdom Come: Deliverance 2 is an Action RPG (score 9.1) set in 15th-century Bohemia, described as a medieval RPG continuing Henry's story with a larger open world and refined combat. The Hussite Wars presentation confirms that Bohemia in this exact period (1419–1434) was the site of a major religious revolution: Czech Hussites, driven by the execution of Jan Hus in 1415, fought against the Holy Roman Empire and five papal crusades — all of which they defeated. Three specific events that could form game backdrops: the Defenestration of Prague (1419) when Hussite crowds threw Catholic councillors from the New Town Hall windows; the Battle of Vítkov Hill (1420) where Jan Žižka's wagon fortress repulsed the First Crusade; and the Battle of Německý Brod (1422) where crusaders drowned fleeing across the Sázava river.",
+        "source": ["games_2025.csv", "hussite_wars.pptx"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 22,
+        "question": "Doom: The Dark Ages appears in the 2025 games list. The metal history document describes early heavy metal bands who pioneered dark, horror-inspired music. What score and category did Doom: The Dark Ages receive, and which band from the metal document most directly pioneered the horror-themed heavy music that the Doom franchise is rooted in — and in what year did that band release their debut album?",
+        "response": "According to the 2025 games list, Doom: The Dark Ages received a review score of 9.1 and is categorized as an FPS (first-person shooter). It is described as a prequel to the 2016 reboot casting the Doom Slayer in medieval hellish warfare with shields and dragons. According to the metal history document, Black Sabbath most directly pioneered horror-themed heavy music. Formed in Birmingham, England in 1968, Black Sabbath created a sound that was deliberately dark, heavy, and slow — inspired in part by horror films. Their 1970 self-titled debut album is widely considered the first true heavy metal record, establishing the genre's core vocabulary of dark lyrical themes and crushing riffs that directly influenced the aesthetic of the Doom franchise.",
+        "source": ["games_2025.csv", "history_of_metal.md"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 23,
+        "question": "The LOTR document describes how Éowyn defeated the Witch-king despite a prophecy that 'no man could slay him.' The Hussite Wars presentation describes Jan Žižka leading peasant armies to defeat professional knights and papal crusades. In both cases, a dominant military assumption was proven wrong. Using specific details from both documents, explain how each case defied conventional expectations.",
+        "response": "In The Lord of the Rings, the Witch-king of Angmar — leader of the Nazgûl and the most terrifying of Sauron's weapons — had been told by prophecy that no man could slay him. At the Battle of the Pelennor Fields, he killed King Théoden and challenged anyone to face him. He was confronted by Éowyn, Théoden's niece, who had ridden to battle secretly disguised as a Rider of Rohan. When she removed her helmet and said 'I am no man,' the assumption of the prophecy was subverted. Merry struck the Witch-king's leg with his enchanted Barrow-blade, breaking the spell binding his spirit to his form, allowing Éowyn to drive her sword through his head. In the Hussite Wars, the conventional assumption was that professional armored knights were invincible against peasant armies. Jan Žižka defied this by chaining farm wagons into mobile fortresses (Wagenburg), combining crossbowmen, handgunners, pikemen, and artillery in a layered defense that made cavalry charges suicidal. Peasants with minimal training could defeat professional knights. Five successive papal crusades, each with professional armies, all failed — with the 4th and 5th crusades collapsing before battle even began, their armies fleeing at the mere sound of Hussite war hymns.",
+        "source": ["lotr_lore.pdf", "hussite_wars.pptx"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 24,
+        "question": "Tolkien coined the term 'eucatastrophe' for a sudden joyful reversal in storytelling. Using both the LOTR document and the metal history document, give Tolkien's exact definition of eucatastrophe and identify a real-world example from the metal world — specifically involving Dave Mustaine — that parallels this concept.",
+        "response": "According to the LOTR document, Tolkien defined eucatastrophe as 'the sudden, unforeseeable turn for the good, the joyous reversal that cannot be logically derived from what came before.' He called it the distinguishing feature of the best fairy-stories and associated this narrative structure with the Christian Gospel itself. The supreme example in The Lord of the Rings is Gollum's fall into the fire, saving the world through mercy shown to him long ago. A real-world metal parallel: according to the metal history document, Dave Mustaine was expelled from Metallica — what would seem like a catastrophic career setback. Rather than ending his career, this apparent disaster led him to found Megadeth, which became one of the 'Big Four' of thrash metal. Megadeth produced landmark albums including Peace Sells... but Who's Buying? (1986) and Rust in Peace (1990), making Mustaine equally iconic. What seemed like pure defeat became the origin of a second thrash metal titan — a eucatastrophe in the history of metal.",
+        "source": ["lotr_lore.pdf", "history_of_metal.md"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 25,
+        "question": "The metal history document describes Alice Cooper as pioneering theatrical horror in metal performance in the 1970s. The 2025 games list includes Resident Evil 9. What decade does the metal document place Alice Cooper's rise to prominence, what specific theatrical elements did he bring, and what review score and category did Resident Evil 9 receive?",
+        "response": "According to the metal history document, Alice Cooper rose to prominence in the 1970s alongside other American hard rock acts. He is specifically credited with introducing a 'shock-rock element — theatrical horror, outrageous costumes, and provocative performances — that would echo through metal's visual culture for decades.' The document places him in the section covering the 1970s, alongside Aerosmith, KISS, and Ted Nugent, dominating American hard rock with theatrical showmanship. According to the 2025 games list, Resident Evil 9 received a review score of 8.8 and is categorized as Survival Horror, described as Capcom's next mainline Resident Evil entry returning to survival horror roots with a new protagonist and setting.",
+        "source": ["history_of_metal.md", "games_2025.csv"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 26,
+        "question": "Both the Hussite Wars presentation and the LOTR document describe how belief and conviction can drive military forces beyond their apparent limits. What was the religious/ideological conviction driving the Hussites according to the presentation, and give a specific example from the LOTR document where belief or pity — rather than power — proves decisive.",
+        "response": "According to the Hussite Wars presentation, the Hussites were driven by veneration of Jan Hus, who was burned at the stake despite a safe-conduct guarantee. Their conviction centered on the Four Articles of Prague — freedom to preach, communion in both kinds, poverty of clergy, and punishment of public sins. Their battle hymn 'Ye Warriors of God' became one of the most feared sounds on the medieval battlefield, and the 4th and 5th crusades collapsed before battle even began, their armies fleeing at the sound of Hussite singing alone. According to the LOTR document, belief and pity rather than force prove decisive throughout The Lord of the Rings. The clearest example is Gollum's fall at the Crack of Doom: Frodo's mercy toward Gollum — refusing to kill him when he had the chance, showing pity to a wretched creature — is what ultimately saves the world. Tolkien makes this point deliberately: 'pity and mercy, not power and force, are the virtues that ultimately defeat evil.' Even Gandalf and Galadriel, who have great power, refuse the Ring precisely because they know power alone would corrupt any wielder.",
+        "source": ["hussite_wars.pptx", "lotr_lore.pdf"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 27,
+        "question": "Each of the three documents — the Hussite Wars presentation, the metal history document, and the 2025 games list — contains a reference to a figure or work celebrated as the supreme example of their kind. Name: (a) the historical military commander who never lost a single battle, (b) the highest-scoring card game in the 2025 list described as 'massively acclaimed' and its score, and (c) the metal band described in the document as 'the most successful metal band of all time.'",
+        "response": "(a) Jan Žižka — according to the Hussite Wars presentation, he led the Hussite forces from 1419 until his death from plague in 1424 and never lost a single battle in his entire military career. (b) Balatro (Console Expansion) — according to the 2025 games list, it received a score of 9.5 and is described as 'the massively acclaimed poker-inspired roguelite' expanding with new jokers and gameplay modes on consoles. It is a Card Roguelite. (c) Metallica — the metal history document states that Metallica, formed in Los Angeles in 1981, 'became the most successful metal band of all time.'",
+        "source": ["hussite_wars.pptx", "games_2025.csv", "history_of_metal.md"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 28,
+        "question": "The LOTR document explains why the One Ring could not be used for good purposes even by a well-intentioned wielder. The 2025 games list includes several games with themes of ancient evil or world-threatening antagonists. What exact reasoning does the LOTR document give for why the Ring cannot be used for good, and name three games from the 2025 list involving dark or cosmic evil themes along with their review scores?",
+        "response": "According to the LOTR document, the One Ring cannot be used for good ends because 'whoever wields it, even with good intentions, would inevitably become a Dark Lord themselves — not Sauron's servant but their own tyrant, imposing their own order on the world.' This is because when Sauron forged the Ring in Mount Doom, he poured into it a great part of his own power, will, and essence — 'The Ring is in some sense Sauron himself — his domination, his malice, his desire to order and control all things.' This is why Gandalf refuses it when Frodo offers it, and why Galadriel refuses it despite showing Frodo a vision of the terrible power she would wield. Three 2025 games involving dark or cosmic evil themes: Doom: The Dark Ages (FPS, 9.1) — the Doom Slayer fighting hellish forces in medieval warfare; Darkest Dungeon III (Roguelite, 8.5) — Red Hook Studios pushes further into cosmic horror; and Elden Ring Nightreign (Co-op Roguelite, 8.8) — set in the Elden Ring universe, which centers on ancient cosmic powers threatening the world.",
+        "source": ["lotr_lore.pdf", "games_2025.csv"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 29,
+        "question": "Both the metal history document and the Hussite Wars presentation describe underground or minority movements that eventually achieved lasting historical recognition despite facing overwhelming opposition. How did the Hussite movement achieve partial recognition according to the presentation, and how does the metal document describe thrash metal's cultural standing relative to glam metal's mainstream dominance?",
+        "response": "According to the Hussite Wars presentation, the Hussite movement achieved partial recognition through the Council of Basel (1436), which produced the Compactata of Basel granting Bohemia the right to communion in both kinds — a partial recognition of the Four Articles of Prague. Despite all five anti-Hussite Crusades failing, the movement secured unique religious rights for Bohemia, established Czech religious independence, and is credited as a precursor to the Protestant Reformation that predated Luther by 100 years. According to the metal history document, thrash metal emerged as an underground movement in the early 1980s while glam metal 'ruled the charts,' with glam bands like Mötley Crüe and Bon Jovi selling tens of millions of copies and dominating radio, MTV, and arenas. Thrash metal was 'darker, faster, angrier, and deliberately anti-commercial.' However, the document states that the underground thrash movement 'would ultimately prove even more influential' than glam metal. When grunge swept away glam metal almost overnight in the early 1990s, thrash metal — and the underground extreme metal it spawned — endured, with Metallica filling stadiums well into the 2020s.",
+        "source": ["hussite_wars.pptx", "history_of_metal.md"],
+        "difficulty": "hard"
+    },
+    {
+        "id": 30,
+        "question": "Using all three documents — the metal history, the 2025 games list, and the LOTR lore document — answer the following: (a) What does the metal document say about Metallica's 2023 album 72 Seasons and its chart performance? (b) What does the games list say about Hollow Knight: Silksong (score and story description)? (c) What are the final words of The Lord of the Rings according to the LOTR document, spoken by which character, and why does Tolkien consider that character the 'chief hero'?",
+        "response": "(a) According to the metal history document, Metallica's 2023 album 72 Seasons debuted at number one in multiple countries — described as 'a reminder that metal's original titans still command massive audiences.' (b) According to the 2025 games list, Hollow Knight: Silksong received a review score of 9.5 (tied for highest in the entire list) and is categorized as an Action Platformer. It is described as 'Team Cherry's long-anticipated sequel follows Hornet on a pilgrimage to a new mysterious kingdom.' (c) According to the LOTR document, the final words of The Lord of the Rings are spoken by Samwise Gamgee. After watching Frodo's ship sail to the Undying Lands at the Grey Havens, Sam returns home to his wife Rosie and his children, sits in his armchair, and says: 'Well, I'm back.' Tolkien considers Sam the chief hero because he embodies the importance of the small and humble — a gardener's son who has never been anywhere, who packed a cooking pot in his baggage for a journey into Mordor, whose courage and friendship carried the quest's moral weight through its darkest passages. Tolkien explicitly wrote that Sam is 'the chief hero' of The Lord of the Rings.",
+        "source": ["history_of_metal.md", "games_2025.csv", "lotr_lore.pdf"],
+        "difficulty": "hard"
+    }
+]
