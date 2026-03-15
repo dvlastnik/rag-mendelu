@@ -1,0 +1,31 @@
+[project]
+name = "rag-mendelu"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chromadb>=1.4.0",
+    "colorlog>=6.10.1",
+    "deepeval>=3.8.1",
+    "docling>=2.67.0",
+    "dotenv>=0.9.9",
+    "fastembed>=0.7.4",
+    "sentence-transformers>=3.0.0",
+    "flashrank>=0.2.10",
+    "langchain>=1.2.3",
+    "langchain-community>=0.4.1",
+    "langchain-core>=1.2.7",
+    "langchain-ollama>=1.0.1",
+    "langchain-text-splitters>=1.1.0",
+    "pandas>=2.3.3",
+    "pip>=26.0.1",
+    "pytest>=9.0.2",
+    "qdrant-client>=1.16.2",
+    "spacy>=3.8.11",
+]
+
+[tool.pytest.ini_options]
+pythonpath = "."
+testpaths = ["tests"]
+addopts = "-v"

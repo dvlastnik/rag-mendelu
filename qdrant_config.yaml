@@ -1,0 +1,7 @@
+log_level: INFO
+
+storage:
+  storage_path: /qdrant/storage
+
+service:
+  enable_static_content: true

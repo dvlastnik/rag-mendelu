@@ -1,0 +1,212 @@
+[
+  {
+    "id": 1,
+    "question": "What was the record for global temperature in 2024 according to the ESOTC report?",
+    "response": "Globally, 2024 was the warmest year on record, following the warmth of 2023. It became the first year with a global average temperature exceeding 1.5°C above the pre-industrial level.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 2,
+    "question": "How fast is Europe warming compared to the global average?",
+    "response": "Since the 1980s, Europe has been warming twice as fast as the global average, making it the fastest-warming continent on Earth.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 3,
+    "question": "What was the record for renewable energy generation in Europe in 2024?",
+    "response": "In 2024, the proportion of actual electricity generation by renewables in Europe reached a record high of 45%, compared to 43% in 2023.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 4,
+    "question": "Which specific extreme weather event occurred in Valencia, Spain, in late 2024?",
+    "response": "In late October 2024, a cut-off low-pressure system brought record-breaking rainfall and catastrophic flooding to the Valencia region of Spain, killing at least 232 people in the province.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 5,
+    "question": "What percentage of European cities now have dedicated climate adaptation plans?",
+    "response": "As of early 2024, an estimated 51% of European cities have dedicated climate adaptation plans, up from 26% in 2018.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 6,
+    "question": "Which month in 2024 saw intense wildfire activity in Portugal, and what was the impact?",
+    "response": "In September 2024, large fires in Portugal burned around 110,000 hectares in a single week, representing roughly a quarter of Europe's total annual burnt area.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 7,
+    "question": "How did Arctic sea ice extent perform in September 2024?",
+    "response": "At its annual minimum in September 2024, the monthly Arctic sea ice extent was 19% below average, ranking as the fifth lowest in the satellite record.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 8,
+    "question": "What was the highest daily sea surface temperature recorded in the Mediterranean Sea in 2024?",
+    "response": "On August 13, 2024, the daily sea surface temperature for the whole Mediterranean Sea peaked at a record 28.7°C.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 9,
+    "question": "How did the 24-hour rainfall record in Spain perform during the Valencia flooding in 2024?",
+    "response": "On October 29, 2024, Turís Mas de Calabarra recorded 771.8 mm of rain in 24 hours, which is the second highest 24-hour rainfall total on record for Spain.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 10,
+    "question": "Which regions in Europe saw their highest glacier mass loss on record in 2024?",
+    "response": "Glaciers in Scandinavia and Svalbard recorded their highest annual rates of mass loss on record in 2024.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "easy"
+  },
+  {
+    "id": 11,
+    "question": "Describe the 'east-west contrast' mentioned in the ESOTC 2024 report.",
+    "response": "The report highlights a distinct contrast where eastern areas were generally sunnier and warmer than average, while western areas were cloudier and wetter. Eastern Europe saw record-high annual temperatures, whereas western Europe saw one of its ten wettest years since 1950.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 12,
+    "question": "What were the results of the heatwaves in southeastern Europe during the summer of 2024?",
+    "response": "Southeastern Europe experienced its longest heatwave on record in July 2024. The region saw a record 66 days of 'strong heat stress' and a record 23 tropical nights during the summer.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 13,
+    "question": "Explain the significance of Storm Boris in September 2024 regarding European rivers.",
+    "response": "Storm Boris caused flows to reach at least twice the average annual maximum along 8,500 km of rivers in central and eastern Europe. Severe flooding was observed in the upper and middle Danube, Elbe, and Oder basins.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 14,
+    "question": "How did lake surface water temperatures (LSWT) in Europe behave in 2024?",
+    "response": "The average LSWT for 267 European lakes during the warm season (July-September) was the highest on record at 0.77°C above the 1995-2020 average. European lakes are warming at a rate of roughly 0.34°C per decade.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 15,
+    "question": "What are the most urgent climate risks identified for European infrastructure in the EUCRA report?",
+    "response": "Pluvial and fluvial flooding are identified as requiring urgent action, as they are expected to reach 'critical' severity by mid-century and 'catastrophic' severity by the late century under high warming scenarios.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 16,
+    "question": "How did the number of 'frost days' in 2024 compare to historical records?",
+    "response": "The area of European land experiencing fewer than 90 frost days (roughly 69%) was the largest on record in 2024, indicating a shrinking area of Europe subjected to temperatures below freezing.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 17,
+    "question": "Detail the wildfire carbon emissions from high northern latitudes in 2024.",
+    "response": "Total wildfire carbon emissions north of 60°N reached an estimated 151 million tonnes, the sixth-highest in the 22-year GFAS record. Emissions north of the Arctic Circle alone were the third highest since 2003.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 18,
+    "question": "What characterizes a 'wind drought' in the context of renewable energy in 2024?",
+    "response": "A 'wind drought' is a prolonged period of below-average wind speeds. In late October and early November 2024, northwestern Europe experienced a wind drought where potential wind power generation dropped to 75% below average.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 19,
+    "question": "What did the ESOTC report state about the state of the Greenland Ice Sheet in 2024?",
+    "response": "For the 2023-2024 hydrological year, the Greenland Ice Sheet recorded its third smallest mass loss since 2001, primarily due to limited summer surface melt and above-average snowfall.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 20,
+    "question": "How did the 2024 river network flooding compare to previous years?",
+    "response": "River flows in 30% of the European network exceeded the 'high' flood threshold, and 12% exceeded the 'severe' threshold. This represented the fifth-largest percentage of the network to flood since 1992 and the largest since 2013.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "medium"
+  },
+  {
+    "id": 21,
+    "question": "What physical mechanisms contribute to 'Arctic amplification' according to the report?",
+    "response": "Arctic amplification is driven by the rapid reduction in snow and ice coverage, which reduces surface reflectivity (albedo). This 'temperature-albedo feedback loop' causes the region to absorb more solar energy and warm more rapidly.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 22,
+    "question": "Explain how the Universal Thermal Climate Index (UTCI) is used to measure thermal stress.",
+    "response": "The UTCI measures the environmental effect on humans by accounting for temperature, humidity, wind speed, sunshine, and radiation. It is expressed as a 'feels like' temperature and divided into ten categories of heat and cold stress.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 23,
+    "question": "How did the atmospheric circulation in summer 2024 specifically affect the European Arctic?",
+    "response": "A persistent pattern characterized by low pressure over Iceland and high pressure over the Barents and Kara Seas promoted warm southerly winds toward the Barents Sea and cool northerly winds over western Greenland. This led to record temperatures in Svalbard and limited ice loss in Greenland.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 24,
+    "question": "Analyze the role of soil moisture in the 2024 heatwaves in southeastern Europe.",
+    "response": "Southeastern Europe recorded its driest summer conditions in a 12-year record. During heatwaves, these dry soils reduced evaporative cooling, which amplified temperature increases and intensified the heat extremes in the region.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 25,
+    "question": "Contrast the renewable energy resources in Europe during the 'dark year' of 2024.",
+    "response": "Western and northwestern Europe experienced much below-average solar PV potential due to cloud cover, characterizing a 'dark year.' However, wetter conditions in these regions led to above-average run-of-river hydropower potential throughout the year.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 26,
+    "question": "What specific data characterizes the 'unusual persistence' of the 2024 heatwaves in southeastern Europe?",
+    "response": "Between June 1 and September 5 (97 days), there were 43 days with heatwaves. In August, there were as few as three days between separate heatwave episodes, and maximum temperatures were above average for all but two days of the summer.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 27,
+    "question": "How do sea level rise rates in the last ten years compare to the 1999-2009 period globally?",
+    "response": "Global mean sea level rise is accelerating. It averaged 4.2 mm per year over the last ten years, compared to 2.9 mm per year between 1999 and 2009.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 28,
+    "question": "Discuss the 'Key Type Measure' classification for urban adaptation actions in Europe as of 2022.",
+    "response": "Adaptation actions were categorized as physical and technological (35.4%), nature-based solutions (26.6%), governance and institutional (20.3%), knowledge-based (14.3%), and economic (3.4%).",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 29,
+    "question": "What role did high sea surface temperatures play in the 2024 extreme precipitation events?",
+    "response": "High SSTs likely provide additional energy and moisture to storms. The above-average Mediterranean SSTs in 2024 were likely a factor in the extreme rainfall associated with Storm Boris in central/eastern Europe and the catastrophic Valencia flooding in Spain.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  },
+  {
+    "id": 30,
+    "question": "Identify the primary source and trend of greenhouse gas concentrations reported for 2024.",
+    "response": "Atmospheric concentrations of CO2 and methane reached record levels in 2024. Since 2020, CO2 has increased by roughly 2.4 ppm per year, and methane by 12 ppb per year.",
+    "source": "ESOTC-2024-report.md",
+    "difficulty": "hard"
+  }
+]

@@ -172,3 +172,18 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# pkl file containing converted dataset
+*.pkl
+
+# data
+data/ignore_*
+
+# test results
+tests/rag/results/*
+
+# other files for deepeval
+.*
+
+# evaluation matrix
+evaluation_matrix.csv

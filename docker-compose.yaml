@@ -3,21 +3,23 @@ networks:
     driver: bridge
 
 services:
-  text-embedding-api:
-    build: ./text_embedding_api
-    container_name: text-embedding-api
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
     ports:
-      - 8000:8000
-
-  chromadb:
-    image: chromadb/chroma:1.0.7.dev25
-    container_name: chromadb
-    environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
-      - ANONYMIZED_TELEMETRY=False
-      - LOG_LEVEL=debug
-    ports:
-      - 8001:8000
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+      - "${QDRANT_REST_PORT:-6333}:6333"
     networks:
       - net
+    volumes:
+      - ./qdrant_config.yaml:/qdrant/config/config.yaml:ro
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6334/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  qdrant_data:

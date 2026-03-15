@@ -1,0 +1,352 @@
+[
+    {
+        "id": 1,
+        "question": "What temperature record did the United Kingdom break for the first time in 2022, and where was it recorded?",
+        "response": "The United Kingdom exceeded 40°C for the first time on record. A temperature of 40.3°C was recorded at Coningsby on July 19, 2022, surpassing the previous record by 1.6°C.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 2,
+        "question": "What was the global mean near-surface temperature anomaly in 2024 and what record did it set?",
+        "response": "The globally averaged near-surface temperature in 2024 was 1.55°C ± 0.13°C above the 1850-1900 pre-industrial average, making 2024 the warmest year in the 175-year observational record.",
+        "source": "WMO-1368-2025_en.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 3,
+        "question": "What was the absolute record minimum Antarctic sea-ice extent set in 2023, and when did it occur?",
+        "response": "On February 21, 2023, Antarctic sea-ice reached an absolute minimum of 1.79 million km², the lowest extent in the satellite era (1979-present). The 2023 annual maximum in September was also a record low at 16.96 million km², approximately 1 million km² below the previous record low maximum (set in 1986) and roughly 1.5 million km² below the 1991-2020 average.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 4,
+        "question": "What was the atmospheric concentration of CO2 in 2023 and how did it compare to pre-industrial levels?",
+        "response": "In 2023, the atmospheric concentration of CO2 was 420.0 ± 0.1 ppm, representing 151% of the pre-industrial (1750) level of approximately 278 ppm — an increase of 2.3 ppm above the 2022 level.",
+        "source": "WMO-1368-2025_en.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 5,
+        "question": "How many people died as a result of Hurricane Helene in 2024, and why was this historically significant?",
+        "response": "Hurricane Helene caused 219+ deaths, making it the deadliest mainland US hurricane since Hurricane Katrina in 2005. It made landfall as a Category 4 storm in the Big Bend region of Florida on September 26 and caused devastating record flooding inland, particularly in the Appalachian Mountains of western North Carolina.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 6,
+        "question": "Which month in 2023 was the warmest ever recorded globally, and what was unusual about the monthly temperature records that year?",
+        "response": "July 2023 was the warmest month on record globally. Furthermore, every month from June through December 2023 set new monthly temperature records, with September 2023 surpassing its previous monthly record by the most dramatic margin (0.46-0.54°C) in approximately 60 years of records.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 7,
+        "question": "What happened to glaciers in Venezuela and Colombia by 2024?",
+        "response": "By 2024, all glaciers in Venezuela had officially disappeared, and Colombia's Conejeres Glacier was declared extinct. These losses mark the complete elimination of glacial ice from Venezuela — a country that once had six Andean glaciers — and the ongoing disappearance of tropical glaciers in South America.",
+        "source": "10.1175_2024BAMSStateoftheClimate.2.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 8,
+        "question": "What rainfall records were broken during the Valencia, Spain flooding event on October 29, 2024?",
+        "response": "During the catastrophic DANA (cut-off low) flooding in Valencia on October 29, 2024, multiple Spanish national rainfall records were broken: 1-hour record: 184.6 mm (more than 3 times AEMET's 60 mm torrential threshold); 6-hour record: 620.6 mm; 12-hour record: 720.4 mm; 24-hour record: 771.8 mm (at Turís Mas de Calabarra, the second-highest 24-hour total ever recorded in Spain after 817.0 mm at Oliva in 1987). The flooding killed 223+ people and caused approximately €16.5 billion in damage.",
+        "source": "ESOTC-2024-report.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 9,
+        "question": "How many people were affected by the Pakistan flooding in 2022, and what was the economic cost?",
+        "response": "The Pakistan flooding of 2022 affected 33 million people, displaced approximately 8 million (including ~800,000 Afghan refugees), killed at least 1,700 people, and caused economic losses of approximately US$30 billion. Around 75,000 km² — about 9% of Pakistan's area — was inundated. Provinces most severely affected were Sindh and Balochistan.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 10,
+        "question": "What record did the Canadian wildfire season of 2023 set, and how did it compare to previous years?",
+        "response": "Canadian wildfires in 2023 burned 14.9 million hectares — more than seven times the 1986-2022 long-term average, and far above the previous record of 6.7 million hectares set in 1989. There were 297 evacuation orders affecting 235,000+ people and 4 direct deaths. Wildfire smoke caused significant air quality impacts in eastern Canada and northeastern USA in June.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "easy"
+    },
+    {
+        "id": 11,
+        "question": "Which eight countries were affected by Storm Boris in September 2024, and what was the impact on river systems?",
+        "response": "Storm Boris in September 2024 (September 12-21) affected Poland, Germany, Austria, Czechia, Slovakia, Romania, Hungary, and Italy. Some areas received up to three months of rainfall in just four days (September 12-16). The upper Danube basin recorded its largest 5-day rainfall total on record. Severe flooding struck the upper and middle Danube, Elbe, and Oder river basins, with approximately 8,500 km of rivers experiencing flows at twice or more their annual maximum. At least 24 people died and damage amounted to several billion euros.",
+        "source": "ESOTC-2024-report.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 12,
+        "question": "What were the key meteorological statistics and human impacts of Typhoon Yagi in September 2024?",
+        "response": "Typhoon Yagi formed on September 1 near Palau and reached peak intensity on September 5 with a central pressure of 915 hPa and maximum sustained winds of 225 km/h at Hainan, making it the second-strongest cyclone landfall in China on record. It made its final landfall near Haiphong, Vietnam on September 7 — the strongest storm to hit Vietnam in 30 years — with wind gusts of 223 km/h and rainfall exceeding 500 mm at many stations. The typhoon caused 328 deaths in Myanmar, 299 in Vietnam, and 700+ total fatalities. It destroyed 235,000 houses in Vietnam alone.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 13,
+        "question": "Describe the impacts of Tropical Cyclone Freddy in 2023, including countries affected and death toll.",
+        "response": "Tropical Cyclone Freddy was one of the world's longest-lived tropical cyclones on record. It formed on February 6 off western Australia and made multiple landfalls before its final landfall in Mozambique on March 11. Deaths: 679 in Malawi (especially hard hit), 165 in Mozambique, plus additional deaths in Madagascar and Zimbabwe. Internal displacements in Malawi: 659,000+. Mozambique received up to 672 mm of rainfall from Freddy. The storm devastated communities across four countries in southern Africa.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 14,
+        "question": "How did the rate of global mean sea level rise change from the first decade of satellite records (1993-2002) to the decade 2014-2023?",
+        "response": "The rate of global mean sea level rise more than doubled: from 2.13 mm/year in the first decade of satellite records (1993-2002) to 4.77 mm/year in the decade 2014-2023. By 2015-2024, the rate remained similarly elevated at approximately 4.7 mm/year. The overall acceleration is approximately 0.12 ± 0.05 mm/yr². The 2024 global mean sea level reached 105.8 mm above the 1993 baseline — a new record and the 13th consecutive year of new records.",
+        "source": "1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 15,
+        "question": "What was the area burned in the Greek wildfires of 2023 and what record did they set?",
+        "response": "The Greek wildfires in late August-early September 2023 burned 96,000 hectares, making them the largest EU wildfire on record at the time. The fires were driven by the combination of extreme heat (southern Europe and North Africa heatwave in late July 2023, with Italy reaching 48.2°C on July 24) and prolonged drought conditions across the eastern Mediterranean.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 16,
+        "question": "Describe the notable aspects of the East Africa flooding in March-May 2024, including the unprecedented tropical cyclone activity.",
+        "response": "East Africa experienced significant flooding in March-May 2024, with Kenya's western areas receiving rainfall near double the long-term average. Two historically unprecedented tropical cyclones formed unusually close to the equator: Cyclone Hidaya made the first landfall at cyclone intensity in Tanzania since at least 1952, bringing 316.6 mm to Kilwa on May 4. Cyclone Ialy was the first known tropical cyclone in Kenyan waters. Lake Victoria reached record high water levels. The event killed 282 people in Kenya and 161 in Tanzania, and affected Uganda, Rwanda, Burundi, Somalia, and Ethiopia. In July, landslides in southern Ethiopia killed 236+ additional people.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 17,
+        "question": "How many consecutive years of negative total mass balance did the Greenland Ice Sheet record by 2022, and what were the key balance figures?",
+        "response": "By 2022, the Greenland Ice Sheet had recorded 26 consecutive years of negative total mass balance. In 2021-2022, the total mass balance was -85 Gt: the surface mass balance was approximately +420 Gt (10th highest since 1980), while the marine (calving/melt) mass balance was a strongly negative -480 Gt. For context, 2022 was the first time melting conditions occurred on September 3 at Summit Station (3,200 m elevation), and the first time post-tropical cyclone Fiona brought heavy rain to Greenland.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 18,
+        "question": "What records did Switzerland's glaciers break in 2022 and what were the contributing factors?",
+        "response": "Swiss glaciers lost 6% of their ice volume in 2022 — the largest single-year loss ever recorded. The total Swiss glacier ice volume declined from 77 km³ in 2001 to 49 km³ by 2022, a loss of more than one-third in just 21 years. Contributing factors included low winter snowfall, Saharan dust deposits that reduced albedo (increasing solar heat absorption), and intense heat waves from May through early September. For the first time in recorded history, no snow survived the summer at the highest measurement sites. In the Alps, the zero-degree isotherm rose to over 5,000 m — a weather balloon at Payerne, Switzerland measured 5,184 m on July 25, the highest in its 69-year record.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 19,
+        "question": "What were the economic losses from Hurricane Ian in 2022, and how did it rank historically?",
+        "response": "Hurricane Ian caused approximately US$113 billion in economic losses, making it the third most costly tropical cyclone on record. It made Category 4 landfall in Florida on September 28 with 10-minute sustained winds of 241 km/h. It caused 152 deaths — the greatest loss of life from a Florida tropical cyclone since the 1930s — and was the 4th strongest Florida landfall on record.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 20,
+        "question": "What were the key statistics of the Maui wildfire in August 2023, and what meteorological factors contributed to it?",
+        "response": "The Maui wildfire in western Maui (near Lahaina) in August 2023 killed at least 100 people — the most deaths from a US wildfire in over 100 years. It destroyed 2,200+ structures in Lahaina (including 400 homes), prompted evacuation notices for 7,500 people, and caused economic losses of US$5.6 billion. Meteorological contributing factors included: low humidity, strong gusty winds created by a pressure gradient between a high-pressure system to the north and Hurricane Dora's circulation to the south, and pre-existing drought conditions.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 21,
+        "question": "Describe the unprecedented rainfall event in the UAE in April 2024 and its impacts.",
+        "response": "In mid-April 2024, the Persian Gulf region experienced extraordinary rainfall. The UAE's Khatm Al Shakla station in Al Ain recorded 259.5 mm in 24 hours — among the heaviest since records began in 1949 and exceeding the UAE's long-term annual average. Dubai Airport recorded 162.8 mm over 36 hours and 142.0 mm on April 16 alone. Highways were submerged and Dubai Airport was paralyzed for approximately 48 hours. Bahrain, Oman, and Iran were also affected. This event followed the pattern of a slow-moving low-pressure system intensified by a warmer-than-normal Persian Gulf.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 22,
+        "question": "What were the food and water security impacts of the southern Africa drought in 2024?",
+        "response": "The 2024 southern Africa drought was driven primarily by El Niño teleconnection patterns. From January to March 2024 — the critical crop-growing period — rainfall was more than 50% below average across Zimbabwe, Botswana, Zambia, and Namibia, with the lowest values in the satellite record for many locations. Over 25 million people faced food and water shortages. In Zambia, more than 40% of the maize area suffered total crop failure and grain production dropped 50%. Lake Kariba, shared by Zimbabwe and Zambia, approached its minimum operating level, severely reducing hydroelectric generation. Angola, Mozambique, Malawi, and Lesotho were also significantly affected.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 23,
+        "question": "Describe the flooding in Rio Grande do Sul, Brazil in late April-early May 2024, including rainfall totals and human impacts.",
+        "response": "The Rio Grande do Sul flooding in late April-early May 2024 was the worst flooding event on record for the region, caused by a slow-moving low-pressure system. Rainfall totals were extreme: Santa Maria recorded 213.6 mm on May 1 and 470.7 mm over three days; Soledade recorded 498 mm over five days (May 1-5). The Guaíba Lake reached a record level 0.55 m above its previous record from 1941. Porto Alegre and surrounding communities were inundated. The disaster caused 182 deaths, displaced 420,000+ people, and caused economic losses of several billion USD — one of the costliest meteorological disasters in South American history.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 24,
+        "question": "What was the extent of ocean surface coverage by marine heatwaves in 2023, and how did it compare to 2022 and the previous record?",
+        "response": "In 2023, the global ocean daily average coverage by marine heatwaves was 32% — well above the previous record of 23% set in 2016. In comparison, 2022 had approximately 58% of ocean surface experiencing at least one marine heatwave during the year (a different metric measuring annual total rather than daily average). The North Atlantic in 2023 saw persistent widespread marine heatwaves from spring through year-end, with temperature anomalies reaching +3°C. The Mediterranean experienced near-complete strong/severe marine heatwave coverage for the 12th consecutive year. Waters around New Zealand were 1-2°C above average for approximately 270 days.",
+        "source": "1347_Global-statement-2023_en.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 25,
+        "question": "What were the characteristics of the Antarctic ozone hole in 2022, including area and ozone minimum?",
+        "response": "The Antarctic ozone hole on October 5, 2022 reached 26 million km², comparable in size to the 2020 and 2021 holes. This was close to but smaller than the 2015 peak (28.2 million km²) and the 2006 all-time record (29.6 million km²). The minimum ozone concentration was 97 Dobson units, recorded on October 1-2, with near-zero concentrations observed between 15-20 km altitude at the end of September. The 2022 ozone hole had similar persistence characteristics to recent prior years, driven partly by the lingering stratospheric water vapor from the Hunga Tonga-Hunga Ha'apai eruption in January 2022.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "medium"
+    },
+    {
+        "id": 26,
+        "question": "Compare Antarctic sea-ice minimum extents recorded in 2022, 2023, and 2024, noting what records were set each year.",
+        "response": "Antarctic sea-ice minimums showed a dramatic multi-year pattern: In 2022, the minimum reached 1.92 million km² on February 25 — the lowest ever recorded at the time, approximately 1 million km² below the 1991-2020 mean. In 2023, a new absolute record minimum of 1.79 million km² was set on February 21; additionally, the September 2023 annual maximum was a record low at 16.96 million km² — about 1.5 million km² below the 1991-2020 average maximum and 1 million km² below the 1986 previous record low maximum. In 2024, the minimum was 1.99 million km² (tied for the 2nd lowest in the satellite era), and the maximum was 17.16 million km² (2nd lowest on record). 2024 was the third consecutive year with an annual minimum below 2 million km².",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 27,
+        "question": "Trace the trend of global mean temperature anomalies from 2022 to 2024 relative to the 1850-1900 baseline, including ranking context.",
+        "response": "Global mean temperature anomalies set successive records: 2022 was 1.15 [1.02-1.28]°C above the 1850-1900 average, ranking as the 5th or 6th warmest year on record — notably the warmest La Niña year ever recorded, achieved despite a third consecutive La Niña year cooling effect. In 2023, the anomaly jumped to 1.45 ± 0.12°C, surpassing the previous record (1.29°C in 2016) and making it the warmest year in the 174-year instrumental record; every month from June-December 2023 set monthly records. In 2024, a new record was set at 1.55 ± 0.13°C — the warmest in the 175-year observational record. Together, all years from 2015-2024 constituted the ten warmest years ever recorded.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 28,
+        "question": "How did global ocean heat content evolve from 2022 to 2024, and what does the trend reveal about ocean warming acceleration?",
+        "response": "Ocean heat content (OHC) set a new all-time record in each year: in 2022, OHC reached its highest level, exceeding 2021 by 17 ± 9 ZJ; in 2023, it exceeded the 2022 record by 13 ± 9 ZJ; in 2024, it exceeded 2023 by 16 ± 8 ZJ — the eighth consecutive year of new OHC records. The warming rate for the upper 2,000 m is clearly accelerating: the long-term (1971-2024) rate was 0.6 ± 0.1 W m⁻², rising to 0.99-1.07 W m⁻² for 2005-2024 — more than twice the 1960-2005 rate of 0.27-0.34 W m⁻². The Southern Ocean alone accounts for approximately 36% of global OHC increase since 1958.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 29,
+        "question": "List the African countries and subregions that experienced major flood-related deaths or large-scale displacement in 2024, with key statistics for each.",
+        "response": "In 2024, major flooding caused significant casualties or displacement across Africa: Sahel (wet monsoon 50%+ above average): Almost every Sahel country affected — Senegal, Mali, Burkina Faso, Niger, Nigeria, Cameroon, Chad, Central African Republic, Sudan — with 1,526 deaths and 1+ million displaced in West and Central Africa (to October 31); Morocco, Algeria, and Tunisia were also affected by September Mediterranean storms. East Africa (March-May): Kenya — 282 deaths; Tanzania — 161 deaths plus Cyclone Hidaya impacts (316.6 mm at Kilwa); Uganda, Rwanda, Burundi, Somalia, and Ethiopia affected; Lake Victoria at record high levels. Ethiopia (July): 236+ deaths from southern Ethiopia landslides. Congo basin (early 2024): DRC — 300 deaths, 1.6 million ha agricultural land inundated; Republic of Congo — 17 deaths. Southern Africa (Cyclone Chido, December): 172+ total deaths across Mozambique, Malawi, Madagascar, Mayotte, and Comoros; Cyclone Chido peaked at 213 km/h winds and 935 hPa central pressure.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 30,
+        "question": "How did the climate situation in East Africa reverse dramatically between 2022 and 2023, and what were the population impacts of each phase?",
+        "response": "East Africa experienced a dramatic climate reversal between drought and flood. Through 2022 and into early 2023, the region suffered five consecutive below-average wet seasons — the most extensive and persistent drought in decades. By August 2022, 37 million people faced acute food insecurity in Kenya, Somalia, and southern Ethiopia; Somalia had 1.2 million internally displaced from drought alone. By January 2023, 22.5-23.4 million people in the Greater Horn faced crisis-level food insecurity or worse. Then, during the October-December 2023 Deyr rainy season (driven partly by a positive Indian Ocean Dipole), rainfall reached 100-200 mm in some areas — several times long-term averages locally. This caused severe flooding: 352+ deaths across Ethiopia, Kenya, and Somalia; 1.8 million displacements across six countries (Burundi, Ethiopia, Kenya, Somalia, South Sudan, Uganda); and 2.4 million people in Somalia affected by flooding in the final quarter of 2023 alone. A further 3 million people were still displaced from the prior five drought seasons when the floods struck.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 31,
+        "question": "Summarize the greenhouse gas concentration milestones for CO2, CH4, and N2O across 2022, 2023, and 2024, noting any record growth rates.",
+        "response": "All three main greenhouse gases set new records each year. CO2: 2022 consolidated data showed 417.9 ± 0.2 ppm (150% of pre-industrial); 2023 reached 420.0 ± 0.1 ppm (151%); 2024 real-time data showed 422.8 ± 0.1 ppm (52% above pre-industrial). The 2023-2024 CO2 growth of 3.4 ppm was the highest annual increase since measurements began in the 1960s, driven partly by El Niño-related fire emissions and reduced land carbon uptake. CH4: 2021 showed the largest-ever annual increase (+18 ppb), reaching 1,908 ppb (262% of pre-industrial); 2022: 1,923 ± 2 ppb (264%); 2023: 1,934 ± 2 ppb (265%). N2O: 2022: 335.8 ± 0.1 ppb (124% of pre-industrial), with the highest annual growth rate on record; 2023: 336.9 ± 0.1 ppb (125%). All concentrations are at their highest levels in at least 800,000 years of ice core records.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 32,
+        "question": "How did the ENSO cycle transition from La Niña (2020-2022) to El Niño (2023-2024), and what were the key climatological consequences of each phase?",
+        "response": "A triple-dip La Niña persisted from mid-2020 through end-2022 — only the third occurrence in 50 years (previous: 1973-76, 1998-2001) and the first in the 21st century. La Niña drove: wetter conditions in Southeast Asia, Australia, and northern South America; drier conditions in the Horn of Africa; moderated global temperatures (2022 was warmest La Niña year on record). By June 2023, sea surface temperatures crossed El Niño thresholds; El Niño was established by September 2023 and peaked at an Oceanic Niño Index of 2.0°C (November 2023-January 2024, 5th highest since 1950). El Niño then: boosted 2023 and 2024 global temperatures to successive records; contributed to the highest CO2 growth rate since the 1960s via increased fire emissions and reduced terrestrial carbon sinks; influenced rapid sea-level rise; created drought in southern Africa, Maritime Southeast Asia, and parts of the Americas; and intensified rainfall in the Horn of Africa causing the 2023 flooding reversal.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 33,
+        "question": "Compare global glacier mass balance records across the 2021-22, 2022-23, and 2023-24 hydrological years, noting which regions drove the extreme losses.",
+        "response": "Three consecutive hydrological years produced historically extreme glacier losses. 2021-22: average global reference glacier mass balance of -1.18 m w.e. — Swiss glaciers alone lost 6% of their volume (a single-year record). 2022-23: the global reference glacier mass balance was -1.2 m w.e. — the largest loss on record (1950-2023), driven by extreme losses in western North America (Place Glacier: -3.1 m w.e.; Haig Glacier: -3.8 m w.e.; rates 5 times the 2000-2019 average) and Europe (Swiss glaciers lost an additional 4.4% of remaining volume, making the combined two-year total approximately 10% of Swiss glacier ice lost). 2023-24: the three-year combined balance was the most negative on record; all 58 reporting reference glaciers lost mass (only the second time since 1970); exceptionally negative balances in Norway, Sweden, Svalbard, and the tropical Andes. Seven of the ten most negative glacier years since 1950 have occurred since 2016.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 34,
+        "question": "Compare estimated excess heat-related deaths in Europe in 2022 versus 2023, with country-level detail where available.",
+        "response": "Heat-related excess mortality was substantial in both years. In 2022, the summer heat waves caused approximately 61,700 excess heat-related deaths across the WHO European Region. Country-level estimates: Spain ~4,600; Germany ~4,500; UK ~2,800 (ages 65+); France ~2,800; Portugal ~1,000 — over 15,000 total in just these five countries. In 2023, the estimated excess heat-related deaths in Europe were approximately 47,700 — lower than 2022 despite warmer overall conditions, possibly reflecting geographic distribution differences and adaptation measures. Over the past 20 years, the WHO European Region has seen a 30% increase in heat mortality. In 2024, heat stress indicators were near the 2nd-highest on record for Europe, with 17 July 2024 seeing 20% of Europe under 'very strong' heat stress — matching the level seen on August 7, 2010.",
+        "source": "Statement_2022.pdf, ESOTC-2024-report.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 35,
+        "question": "List the European countries and locations that broke national temperature records during the summer heatwaves of 2022, with specific temperatures and dates.",
+        "response": "During the 2022 European heatwaves, numerous countries broke national records: United Kingdom: 40.3°C at Coningsby, July 19 — the first time the country exceeded 40°C, surpassing the previous record by 1.6°C. Ireland: 33.0°C at Phoenix Park, Dublin, July 18 (highest since 1887). Germany: 40.1°C at Hamburg-Neuwiedenthal, July 20 (northernmost location to reach 40°C in Germany). France: 104 stations broke all-time records on July 18, with many exceeding previous records by more than 3°C. Italy: 40.0°C at Urbe (Rome), June 27. Sweden: 37.2°C at Målilla, July 21 (highest since 1947). Morocco: 49.1°C at Smara, July 10. The AMS BAMS 2022 report noted that 16 individual European countries set temperature records at national scale during 2022.",
+        "source": "Statement_2022.pdf, 10.1175_2023BAMSStateoftheClimate.2.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 36,
+        "question": "Compare Canadian wildfire activity across 2022, 2023, and 2024 in terms of area burned, key events, and records set.",
+        "response": "Canadian wildfire activity showed extreme multi-year variation. In 2022, significant wildfire activity occurred across western Canada contributing to regional smoke impacts, with Amazonian wildfire carbon emissions being the highest in at least 20 years for the broader region. In 2023, Canada burned 14.9 million hectares — more than 7 times the 1986-2022 long-term average and crushing the previous record of 6.7 million ha (1989). There were 297 evacuation orders affecting 235,000+ people and 4 direct deaths; wildfire smoke impacted air quality across eastern Canada and northeastern USA in June. In 2024, approximately 5.3 million hectares burned — still about 2 times the long-term average but substantially less than 2023. The Jasper wildfire (late July 2024) destroyed one-third of the historic town, with insured losses of US$600 million (the second-costliest Canadian wildfire after Fort McMurray 2016). Canadian wildfires in 2024 recorded the second-highest carbon emissions on record.",
+        "source": "1347_Global-statement-2023_en.pdf, 10.1175_2024BAMSStateoftheClimate.2.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 37,
+        "question": "What heatwave records were set in southeastern Europe during the summer of 2024, including duration, intensity, and heat stress statistics?",
+        "response": "Southeastern Europe experienced an exceptional summer of heat in 2024. Six heatwaves occurred between June and August, totaling 43 heatwave days out of 97 days from June 1 to September 5. The July 2024 heatwave was the longest on record for the region: 13 days with a temperature anomaly of 9.2°C, affecting 55% of the region. For comparison, the previous longest heatwave (July 2007) lasted 10 days with a 9.7°C anomaly but covered a larger area (72%). In August, three heatwaves lasted 5-8 days with as few as 3 days between them. Heat stress records were also broken: 66 days of 'strong' heat stress (highest on record; average: 29 days); on August 13, 99% of the region experienced strong heat stress, with 53% under 'very strong'. The region also recorded 23 tropical nights (minimum temperature above 20°C) — a new record far above the previous record of 16 (2012) and the average of 8.",
+        "source": "ESOTC-2024-report.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 38,
+        "question": "Describe tropical cyclone activity by ocean basin in 2024, including any notable records or anomalies per basin.",
+        "response": "In 2024, there were 82-86 named tropical cyclones globally (close to the 1991-2020 average of 87). Accumulated Cyclone Energy (ACE) was below average in most basins except the North Atlantic. By basin: North Atlantic: above average (18 cyclones), first season since 2019 with multiple Category 5 hurricanes (Beryl, Helene, Milton). Northeast Pacific: below average (13 cyclones), the latest season start in the satellite record. Northwest Pacific: near-average (26 cyclones) after a slow start; most climatologically active region globally. North Indian Ocean: close to average; Cyclone Asna was the first August cyclone in the Arabian Sea in 40+ years. South Pacific (east of 160°E): well below average (4 cyclones), second consecutive below-average season. Australian region: slightly below average (8 cyclones). Southwest Indian Ocean: slightly above average (10 cyclones); Cyclone Chido made the most intense landfall on Mayotte since 1934 in December.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 39,
+        "question": "What precipitation extremes were recorded in the Philippines during the October-November 2024 tropical cyclone sequence, and what was the human impact?",
+        "response": "The Philippines experienced an extraordinary sequence of 5 tropical cyclones making landfall on Luzon between October 24 and November 17, 2024, with a 6th passing close enough for significant impacts. Tropical Storm Trami (Kristine), despite being the least intense, caused the greatest impacts: 300+ mm of rainfall over large areas on October 24-25, with Daet recording 528.5 mm in 24 hours. Trami caused 159 deaths and damaged 200,000+ houses in the Philippines, then made a second landfall in central Vietnam. Typhoon Man-Yi (Pepito) was the most intense, making landfall in Catanduanes on November 16 near peak intensity (central pressure 920 hPa), killing 14 people. Typhoon Krathon (Julian) was the strongest typhoon of the entire 2024 Northwest Pacific season, with a central pressure of 920 hPa on October 1 and producing 727.8 mm of rain in 24 hours at Basco.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 40,
+        "question": "What evidence across the 2022-2024 climate reports points to accelerating ocean warming, and how does this connect to global sea level rise?",
+        "response": "Multiple converging ocean indicators show clear acceleration. Ocean heat content (OHC) set new all-time records in 2022 (+17 ZJ over 2021), 2023 (+13 ZJ), and 2024 (+16 ZJ), marking 8 consecutive years of records. The ocean warming rate for the upper 2,000 m nearly tripled from 0.27-0.34 W m⁻² (1960-2005) to 0.99-1.07 W m⁻² (2005-2024). Marine heatwave coverage exploded: 58% of ocean surface affected in 2022; daily average of 32% in 2023 (vs. the previous record of 23% in 2016); 91% of ocean surface experienced at least one marine heatwave in 2024. Ocean acidification continued, with surface pH declining at -0.017 ± 0.001 pH units per decade (1985-2023), with 47% of the sampled global ocean acidifying faster than the global average. This warming drives sea level rise: global mean sea level reached new records for 13 consecutive years through 2024 (105.8 mm above the 1993 average), with the rise rate more than doubling from 2.13 mm/yr (1993-2002) to 4.77 mm/yr (2014-2023).",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf",
+        "difficulty": "hard"
+    },
+    {
+        "id": 41,
+        "question": "List all major tropical cyclones and storms in 2024 that caused 100 or more deaths, with region, storm name, approximate death toll, and main impact area.",
+        "response": "Major events causing 100+ deaths in 2024: (1) Saudi Arabia heatwave during Hajj (June): 1,301+ deaths attributed to extreme heat reaching 50.0°C at Arafat on June 17. (2) Typhoon Yagi (Northwest Pacific, September): 700+ total deaths — 328 in Myanmar, 299 in Vietnam, others in Lao PDR, China, Thailand, Philippines; strongest Vietnam landfall in 30 years. (3) Valencia DANA flooding, Spain (October 29): 223+ deaths from a cut-off low-pressure system; the deadliest single flood event in Spain in decades. (4) Cyclone Chido (Southwest Indian Ocean, December): 172+ deaths across Mayotte, Madagascar, Mozambique, Malawi, and Comoros; most intense landfall on Mayotte since 1934. (5) Chile wildfires (January-February): 134 deaths near Viña del Mar — the most known from a wildfire in South American history; 6,500+ homes destroyed. (6) Hurricane Helene (North Atlantic, September-October): 219+ deaths in the southeastern USA — the deadliest mainland US hurricane since Katrina 2005; greatest impacts in western North Carolina.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf, ESOTC-2024-report.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 42,
+        "question": "Synthesize the heatwave events and record temperatures across Asia and the Middle East in 2024, listing regions, peak temperatures recorded, and casualties.",
+        "response": "Asia and the Middle East experienced widespread and deadly heat in 2024: Saudi Arabia/Hajj (June): Arafat near Mecca reached 50.0°C on June 17; all 22 days from June 1-22 measured ≥43°C; 1,301+ deaths attributed to extreme heat during the Hajj period. West Africa pre-monsoon (March-May): Kayes (Mali) 48.5°C on April 3; N'Djamena (Chad) 46.6°C on April 24; Matam (Senegal) 47.9°C on May 5; 102 heat-related deaths recorded. South and Southeast Asia (April-May): 40+ stations in Thailand set records; Bangkok Don Mueang 41.1°C on April 30; Vientiane Airport (Laos) 42.6°C on April 30; 38 deaths in Thailand; extensive school closures in Bangladesh. India (May): Churu, Rajasthan 50.5°C on May 28; 112 deaths from extreme heat nationally. East Asia: Japan recorded its hottest summer on record (1.76°C above 1991-2020 average) and warmest autumn on record; South Korea recorded its hottest summer ever; China saw records at 18 stations. North America: Phoenix, Arizona recorded 113 consecutive days ≥38°C from May 27 to September 16 — shattering the previous record of 76 days; Maricopa County reported 466+ heat-related deaths.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 43,
+        "question": "Analyze the east-west climate contrast observed across Europe in 2024, covering temperature, precipitation, river flows, drought, and flooding.",
+        "response": "Europe in 2024 displayed a stark east-west climate divide. Western and central Europe experienced persistently wet and cloudy conditions: Paris-Montsouris (France) recorded its wettest year on record (901.1 mm); Uccle (Belgium) recorded 1,170.7 mm. Germany had its wettest 12-month period on record (October 2023-September 2024); the Netherlands also broke wettest-year records. Higher-than-average river flows occurred across northwestern Europe, and the most widespread flooding since 2013 struck — Storm Boris in September (8 countries), southern Germany and Switzerland in May-June, and the catastrophic DANA flooding in Valencia, Spain in October (223+ deaths, ~€16.5 billion damage). Eastern and southeastern Europe experienced the opposite: much lower-than-average rainfall from spring through summer, intensifying to the driest summer conditions in the 12-year drought index record. River flows were exceptionally low (35% of rivers with notably/exceptionally low summer flows). Six heatwaves struck southeastern Europe including a record 13-day heatwave in July (9.2°C anomaly). Wildfires were above average (13 Copernicus Emergency Response activations, 11 in southeastern Europe). Temperature contrast: eastern/southeastern Europe saw the largest positive annual anomalies (2-3°C above average); approximately 48% of the continent set record-high annual temperatures, concentrated in central, eastern, and southeastern regions.",
+        "source": "ESOTC-2024-report.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 44,
+        "question": "List all major extreme weather events in South America during 2024, covering floods, droughts, wildfires, and heatwaves with key statistics.",
+        "response": "South America experienced a wide range of extremes in 2024: Wildfires — Chile (January-February): Most destructive near Viña del Mar, killed 134 people (most known from a wildfire in South American history); 6,500+ homes destroyed; Santiago had 5 consecutive days above 35°C; Chile has been below its 1961-1990 rainfall average for 17 consecutive years (2007-2023). Flooding — Rio Grande do Sul, Brazil (late April-early May): Worst on record for the region; 182 deaths; 420,000+ displaced; Guaíba Lake 0.55 m above its 1941 record; one of the costliest meteorological disasters in South American history. Amazon Basin drought (second consecutive year): Rio Negro at Manaus reached 12.11 m minimum in October (0.59 m below 2023 record; over 1 m below any pre-2023 low); Paraguay River at Asunción at record lows in September; Pantanal most significant drought in 70 years. Wildfires: Bolivia set a national record of 90,026 fire starts; Amazonia (Brazil) had 192,700 fire starts (most since 2010). Heatwaves: Argentina intense heat January-February; Brazil hottest September post-1961; Bolivia national temperature record of 47.0°C on October 7-8; Peru matched national record at 41.8°C on October 26.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf, 10.1175_2024BAMSStateoftheClimate.2.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 45,
+        "question": "Synthesize the food security impacts of climate extremes in 2022 and 2023 globally, listing the most affected regions and population figures.",
+        "response": "Climate extremes caused devastating food insecurity in 2022 and 2023. In 2022: 37 million people in the Greater Horn of Africa (Kenya, Somalia, Ethiopia) faced acute food insecurity from five consecutive failed wet seasons. Pakistan's floods inundated 75,000 km² of agricultural land, affecting 33 million people. Nigeria's floods caused US$4.2 billion in losses and 603 deaths. Countries in IPC Phase 5 (Catastrophe): Ethiopia, Nigeria, South Sudan, Somalia, Yemen, Afghanistan, Haiti. Afghanistan: 18.9 million people (45% of population) in crisis or worse. Globally, 2.3 billion people faced food insecurity in 2021; projected undernourished: 767.9 million (9.8% of world population). By January 2023, 22.5-23.4 million in the Greater Horn faced Crisis-level food insecurity or worse. In 2023: the global total of acutely food insecure reached 333 million across 78 WFP-monitored countries, compared to 149 million pre-pandemic — described as 'the largest food-nutrition crisis in modern human history.' South Sudan: 7.8 million (two-thirds of the population) expected severe acute food insecurity. Afghanistan: 15.3 million facing severe acute food insecurity. The WMO noted that 65%+ of agricultural losses globally (2007-2022) came from droughts and 20% from floods/storms/cyclones.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 46,
+        "question": "List the key heatwave events and record temperatures in North America during 2024, with location, temperature, and impacts.",
+        "response": "North America experienced record-breaking heat across multiple areas in 2024: Phoenix, Arizona: 113 consecutive days at or above 100°F (37.8°C), from May 27 to September 16 — shattering the previous record of 76 days; Maricopa County (Phoenix metro) reported 466+ heat-related deaths. Palm Springs, California: 51.1°C on July 5. Las Vegas, Nevada: 48.9°C on July 7. Tepache, northwestern Mexico: 52.0°C on June 20 (among the highest reliably recorded temperatures in Mexico). Mexico City: 34.7°C on May 25 (national capital record). Raleigh-Durham, North Carolina: 41.1°C on July 5. Inuvik, Northwest Territories, Canada (Arctic coast): 34.8°C on August 7, more than 2°C above the previous record. Arizona and California each recorded their hottest summers on record in 2024. Mexico experienced several significant heatwaves and its hottest May on record. Central America endured extreme heat from March through June.",
+        "source": "State of the Global Climate 2024_Extremes Supplement.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 47,
+        "question": "List all major European flood events in 2024 chronologically, including countries affected, key rainfall records, casualties, and economic losses.",
+        "response": "Europe's 2024 flooding was the most widespread since 2013, causing ≥335 deaths, affecting ≥413,000 people, and ≥€18 billion in damage. Chronologically: January — Storm Henk: northern France, England, Wales. February — heavy rainfall: northern Spain. March — multiple floods: France. May-June — storms across eastern France, western Germany, Belgium, Netherlands; southern Germany widespread flooding (locally >100 mm/day); downstream Danube impacts; Switzerland flooding and landslides. September 12-21 — Storm Boris: Poland, Germany, Austria, Czechia, Slovakia, Hungary, Romania, Italy; some areas received 3 months' rainfall in 4 days; upper Danube basin largest 5-day rainfall total on record; 24 deaths. October 3-4 — Bosnia and Herzegovina worst floods since 2014: Jabalnica 334.8 mm/day; 27 deaths (mostly Donja Jablanica). October 16-18 — southern France: Mayres 694 mm in 60 hours. October 25-27 — southern France again: Vidauban 119 mm/hour. October 28-November 4 — Valencia, Spain DANA catastrophe: national records for 1-hour (184.6 mm), 6-hour (620.6 mm), 12-hour (720.4 mm), 24-hour (771.8 mm); 223+ deaths; ~€16.5 billion damage. September-October — Italy (Bologna, Milan): extreme local rainfall and flash flooding.",
+        "source": "ESOTC-2024-report.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 48,
+        "question": "Using the 2024 climate reports, describe the global drought situation in 2024 compared to 2023, listing regions where drought worsened and where it improved.",
+        "response": "Globally, drought conditions in 2024 were less extensive than 2023, but significant and devastating regional droughts persisted or intensified. Regions with worsening or continued drought: Southern Africa (Zimbabwe, Zambia, Botswana, Namibia) — rainfall more than 50% below average in January-March (critical crop season); 25 million+ people facing food/water shortages; Zambia lost 40%+ of maize area to total crop failure; Lake Kariba near minimum operating level. Amazon Basin (Brazil, second consecutive year) — Rio Negro at record lows (12.11 m, 0.59 m below 2023 record). Northwestern Africa (Morocco to Tunisia) — continued multi-year drought. Southeastern Europe — driest summer in the 12-year drought index record; record low river flows; above-average wildfires. Canada — driest and hottest year on record; one of worst wildfire seasons. Peru — third-driest year on record. Greece, Romania, Bulgaria — exceptionally dry conditions. Regions with drought improvement or above-average rainfall: Eastern Africa (flipped from drought to flooding through 2024). Western and central Europe — consistently wetter than average throughout the year. Northern Australia and much of South and Southeast Asia — near-average or above-average rainfall as El Niño weakened. Global overall drought extent was reduced compared to peak 2023 levels, following the weakening of El Niño by mid-2024.",
+        "source": "World Drought Atlas 2024.pdf, ESOTC-2024-report.pdf, 10.1175_2024BAMSStateoftheClimate.2.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 49,
+        "question": "List all significant cyclones and storms that affected Africa in 2022, with the countries impacted and key casualty and displacement figures for each.",
+        "response": "Africa was struck by multiple severe cyclones and storms in 2022, giving communities little time to recover between shocks: Cyclone Ana (January): Hit Madagascar, Mozambique, and Malawi — 190,000 people still displaced in Malawi as of April; 20,000+ IDP households affected in Mozambique. Cyclone Batsirai (February): Hit Madagascar causing 121 fatalities; Réunion recorded 2,044 mm of rainfall at Commerson Crater. Cyclone Gombe (March): Struck Mozambique, affecting 736,000 people, forcing 23,000 into emergency shelters, and internally displacing 129,000. Madagascar suffered four tropical cyclone landfalls within one month (late January-February). Subtropical Depression Issa (April): Extreme flooding in KwaZulu-Natal, South Africa — up to 311 mm in 24 hours on April 11-12; more than 400 deaths; 40,000 displaced. Sahel flooding (mid-year to end 2022): Nigeria — 603 deaths, US$4.2 billion economic losses; Niger — 159 deaths; Chad (N'Djamena) — 250,000+ people displaced October-December. The cumulative effect of multiple consecutive cyclone landfalls in southern Africa left communities no recovery time between disasters.",
+        "source": "Statement_2022.pdf",
+        "difficulty": "complex"
+    },
+    {
+        "id": 50,
+        "question": "Using evidence from all climate reports (2022-2024), demonstrate that each major Earth system indicator — temperature, ocean heat, sea ice, glaciers, sea level, and greenhouse gases — is simultaneously accelerating toward record extremes.",
+        "response": "All key Earth system indicators reached simultaneous record extremes across 2022-2024, demonstrating a coherent and accelerating signal of climate change. Global surface temperature: 2022 was the 5th/6th warmest on record (1.15°C); 2023 broke the record (1.45°C); 2024 broke it again (1.55°C); all 10 years of 2015-2024 were the ten warmest ever recorded. Ocean heat content: New records in 2022 (+17 ZJ), 2023 (+13 ZJ), and 2024 (+16 ZJ); 8 consecutive record years through 2024; the warming rate nearly tripled from the 1960-2005 average. Antarctic sea ice: Near or at record-low minimum each year — 1.92 million km² (2022), 1.79 million km² (2023, absolute record), 1.99 million km² (2024, tied 2nd lowest); third consecutive year below 2 million km². Glacier mass balance: -1.18 m w.e. (2021-22), -1.2 m w.e. (2022-23, largest on record), 2023-24 the most negative three-year period on record; all 58 reference glaciers lost mass in 2024 (only the second occurrence since 1970); Venezuela's glaciers disappeared entirely. Global mean sea level: 13 consecutive years of records through 2024 (105.8 mm above 1993 baseline); rise rate doubled from 2.13 mm/yr (1993-2002) to 4.77 mm/yr (2014-2023). Greenhouse gases: CO2 rose from 415.7 ppm (2021) to 420.0 ppm (2023) to 422.8 ppm (2024); CH4's 2020-21 increase was the largest annual increase on record; N2O's 2022 growth rate was the highest on record; all three gases are at their highest levels in at least 800,000 years of ice core records.",
+        "source": "Statement_2022.pdf, 1347_Global-statement-2023_en.pdf, WMO-1368-2025_en.pdf, ESOTC-2024-report.pdf",
+        "difficulty": "complex"
+    }
+]
