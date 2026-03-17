@@ -515,6 +515,49 @@ class QdrantDbRepository(BaseDbRepository):
         
         return result
         
+    def scroll_all_by_source(self, source: str, limit: int = 500) -> List[MyDocument]:
+        """Fetches all documents from a given source, sorted by chunk_index, up to limit."""
+        if not self.client:
+            self.logger.error("Client not connected")
+            return []
+
+        source_filter = models.Filter(
+            must=[models.FieldCondition(key='source', match=models.MatchValue(value=source))]
+        )
+
+        all_docs = []
+        next_offset = None
+
+        while len(all_docs) < limit:
+            batch_limit = min(100, limit - len(all_docs))
+            records, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=source_filter,
+                with_payload=True,
+                with_vectors=False,
+                limit=batch_limit,
+                offset=next_offset,
+            )
+            for record in records:
+                payload = record.payload or {}
+                text = payload.get('text', '') or payload.get('parent_text', '')
+                metadata = {k: v for k, v in payload.items() if k != 'text'}
+                metadata['point_id'] = record.id
+                all_docs.append(MyDocument(
+                    id=str(record.id),
+                    text=text,
+                    embedding=[],
+                    metadata=metadata,
+                    score=0.0,
+                ))
+            if next_offset is None:
+                break
+
+        # Sort by chunk_index for natural reading order
+        all_docs.sort(key=lambda d: d.metadata.get('chunk_index', 0))
+        self.logger.info(f"scroll_all_by_source('{source}'): {len(all_docs)} documents")
+        return all_docs
+
     def get_all_filenames(self) -> List[str]:
         """
         Gets all source files that are ingested in current database.

@@ -84,10 +84,11 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             original_query = response['original_query']
             rewritten_queries = response['rewritten_queries']
 
-            compressor_results = response.get('compressor_results', [])
-            compressor_results_dicts = []
-            for compressor_result in compressor_results:
-                compressor_results_dicts.append(compressor_result.to_dict())
+            distilled_facts = response.get('distilled_facts', [])
+
+            agent_state = response.get('agent_state', {})
+            completeness_follow_up_query = agent_state.get('completeness_follow_up_query', '')
+            retrieval_iterations = agent_state.get('retrieval_iterations', 0)
 
             extracted_data = []
             for e in response['extracted_data']:
@@ -108,6 +109,8 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             print(f"ERROR: {str(e)}")
             generated_text = f"ERROR: {str(e)}"
             retrieved_docs = []
+            completeness_follow_up_query = ''
+            retrieval_iterations = 0
 
         results.append({
             'id': q['id'],
@@ -115,10 +118,12 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             'ground_truth': q['response'],
             'generated_answer': generated_text,
             'retrieved_sources': retrieved_docs,
-            'compressor_results': compressor_results_dicts,
+            'distilled_facts': distilled_facts,
             'extracted_data': extracted_data,
             'original_query': original_query,
-            'rewritten_queries': rewritten_queries
+            'rewritten_queries': rewritten_queries,
+            'completeness_follow_up_query': completeness_follow_up_query,
+            'retrieval_iterations': retrieval_iterations
         })
 
     return results

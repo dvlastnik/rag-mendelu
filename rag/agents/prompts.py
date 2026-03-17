@@ -10,7 +10,6 @@ class Prompts:
 
         CRITICAL RULES:
         - If the user asks a question -> MUST be 'rag'.
-        - If the user mentions a year (2022) or country -> MUST be 'rag'.
         - If the user refers to previous messages ("and Italy?") -> MUST be 'rag'.
         - "Compare floods" is NOT general conversation. It is a data request.
 
@@ -27,158 +26,129 @@ class Prompts:
         return "You are a helpful assistant. Respond politely to the user."
 
     @staticmethod
-    def get_query_rewriter_agent_prompt() -> str:
-        return """You are a Search Query Generator for a vector database retrieval system.
+    def get_query_decomposer_agent_prompt() -> str:
+        return """You are a Search Query Decomposer for a vector database retrieval system.
 
-TASK: Given a user question (and optional conversation history), generate exactly 2 alternative search queries that improve retrieval coverage.
+        TASK: Given a user question (and optional conversation history), generate targeted search queries that together provide full coverage of the question.
 
-RULES:
-1. If this is a follow-up question (e.g., "and Italy?", "what about 2023?"), FIRST reconstruct the full standalone question using the conversation history, then generate queries from that.
-2. All queries must answer the same information need — do NOT change the topic.
-3. Query 1: keyword-focused — proper nouns, numbers, technical terms, no question words.
-4. Query 2: conceptual/paraphrased — synonyms, alternative angle, full sentence phrasing.
-5. Output ONLY the 2 queries, one per line, no numbering, no explanation.
+        RULES:
+        1. If this is a follow-up question (e.g., "and Italy?", "what about 2023?"), FIRST reconstruct the full standalone question using the conversation history, then generate queries from that.
+        2. For SIMPLE or SINGLE-TOPIC questions: generate exactly 2 queries (keyword-focused + conceptual).
+        3. For COMPLEX or MULTI-PART questions (multiple events, countries, time periods, or data dimensions): decompose into up to 5 sub-queries, each targeting one specific aspect.
+        4. Each sub-query must be independently searchable — no references to other sub-queries.
+        5. Sub-queries should be keyword-dense: proper nouns, dates, technical terms, no question words.
+        6. Do NOT duplicate — each query must target different information.
 
-EXAMPLES:
+        EXAMPLES:
 
-Conversation so far:
-USER: What were the major floods in Pakistan in 2022?
-Current question: And what about India?
-Query 1: India floods 2022 extreme rainfall disaster impact
-Query 2: India monsoon flooding catastrophe 2022 causes consequences
+        Simple question:
+        Current question: What were the main causes of glacier retreat in the Alps?
+        Alps glacier retreat causes climate warming temperature
+        Why are Alpine glaciers shrinking driving mechanisms
 
-Current question: What were the main causes of glacier retreat in the Alps?
-Query 1: Alps glacier retreat causes factors climate warming temperature
-Query 2: Why are Alpine glaciers shrinking mechanisms driving forces
-"""
+        Complex/multi-part question:
+        Current question: List all major European flood events in 2024 with casualties and economic losses
+        European floods 2024 timeline chronological events
+        Storm Boris September 2024 Central Europe casualties fatalities
+        Valencia Spain October 2024 flooding economic losses damage
+        Germany Poland Czechia floods May June 2024 rainfall records
+        European 2024 flood statistics river thresholds severity
 
-    @staticmethod
-    def get_extractor_agent_prompt(available_metadata: dict | None = None) -> str:
-        if available_metadata:
-            lines = []
-            for field, values in available_metadata.items():
-                sample = list(values)[:8]
-                lines.append(f"  - {field}: {sample}")
-            metadata_block = "\n**Filterable fields actually indexed in this database:**\n" + "\n".join(lines) + "\n\nOnly extract filters for fields listed above. If a field is not listed, do not extract it."
-        else:
-            metadata_block = ""
-
-        return f"""Extract metadata filters from the user query to narrow the database search.
-{metadata_block}
-**Extract:**
-- **years**: Any 4-digit year explicitly mentioned (e.g., 2022, 2024). Return as INTEGER.
-- **locations**: Countries, regions, continents, or cities. Return null for global/worldwide scope.
-- **entities**: Named organizations, institutions, or companies explicitly mentioned.
-
-**CRITICAL RULES:**
-1. Extract years even when embedded in titles (e.g., "Report 2023" → year: 2023).
-2. For global/worldwide scope → location: null (do not filter by location).
-3. Only extract what is explicitly mentioned — do NOT infer.
-4. If no filters found, return: {{"targets": []}}
-
-**Examples:**
-
-User: "Floods in Brazil and Peru in 2024"
-Output: {{"targets": [{{"location": "Brazil", "year": 2024, "entities": null}}, {{"location": "Peru", "year": 2024, "entities": null}}]}}
-
-User: "What does NASA say about Antarctic ice loss?"
-Output: {{"targets": [{{"location": "Antarctic", "year": null, "entities": ["NASA"]}}]}}
-
-User: "Best action RPG games with high review scores"
-Output: {{"targets": []}}
-"""
-
-    @staticmethod
-    def get_retrieval_grader_agent_prompt() -> str:
-        return """You are a Document Grader. Your job is to be LENIENT and INCLUSIVE.
-
-        **CRITICAL RULES:**
-        1. **Include if ANY connection exists**: If a document mentions the topic, location, year, or related concepts, INCLUDE IT.
-        2. **Err on the side of inclusion**: When in doubt, include the document. It's better to have extra context than miss important information.
-        3. **Partial matches count**: Even if the document doesn't directly answer the question, include it if it provides relevant context.
-        4. **Output**: Return a JSON list of integer IDs (e.g., `[0, 1, 2, 4]`). No other text.
-
-        **Examples:**
-        Query: "What was the global temperature in 2024?"
-        Docs:
-        [0] "The ESOTC 2024 report covers climate conditions."
-        [1] "Bananas are yellow."
-        [2] "2024 was the warmest year on record at 1.5°C."
-        Output: [0, 2]  # Include [0] because it mentions ESOTC 2024, even though it's not the direct answer
+        Follow-up question:
+        Conversation so far:
+        USER: What were the major floods in Pakistan in 2022?
+        Current question: And what about India?
+        India floods 2022 extreme rainfall disaster impact
+        India monsoon flooding catastrophe 2022 causes consequences
         """
 
     @staticmethod
-    def get_context_compressor_prompt() -> str:
-        return """Extract ONLY the sentences from the document that directly answer or are relevant to the query.
+    def get_fact_extractor_prompt() -> str:
+        return """You are a fact extractor. Read the documents and extract concise factual statements that help answer the question.
 
-RULES:
-1. Return the relevant sentences VERBATIM — word for word, no paraphrasing or summarising.
-2. Join the selected sentences with a space.
-3. If the entire document is relevant, return it unchanged.
-4. If you are unsure whether any sentence is relevant, return the document unchanged.
-5. Do NOT add, rephrase, or summarise anything.
-"""
+        RULES:
+        1. Extract one fact per line — each fact must be a short, standalone statement.
+        2. Preserve exact numbers, dates, names, and measurements word-for-word from the source.
+        3. Condense: remove filler words, but keep all factual content intact.
+        4. Each fact must address at least one aspect of the question — partial relevance counts.
+        5. If no fact is relevant at all, output: NO RELEVANT FACTS FOUND.
+        6. Do NOT add background knowledge, opinions, or inferences not present in the documents.
+
+        EXAMPLES:
+
+        Question: What were the economic losses from European floods in 2024?
+        Document: "The Valencia floods in October 2024 caused an estimated €10.7 billion in damage, making it the costliest single flood event in Spanish history. Over 220 people died."
+        Extracted facts:
+        Valencia floods October 2024 caused €10.7 billion in damage.
+        Valencia floods 2024 killed over 220 people.
+        Valencia 2024 floods were the costliest single flood event in Spanish history.
+
+        Question: Which metal bands formed in the 1980s?
+        Document: "Metallica was formed in Los Angeles in 1981. Slayer formed in 1981 in Huntington Park, California. Megadeth was founded in 1983 by Dave Mustaine after he was fired from Metallica."
+        Extracted facts:
+        Metallica formed in Los Angeles in 1981.
+        Slayer formed in 1981 in Huntington Park, California.
+        Megadeth founded in 1983 by Dave Mustaine.
+        """
 
     @staticmethod
     def get_synthesizer_agent_prompt() -> str:
-        return """You are an expert Q&A assistant. Answer using ONLY the provided numbered sources.
+        return """You are an expert Q&A assistant. Answer using ONLY the provided facts.
 
-**FAITHFULNESS RULE:**
-Every fact, number, date, name, or detail in your answer MUST be explicitly present in the numbered sources below.
-DO NOT add background knowledge, explanations, or logical inferences not stated in the sources.
+        **FAITHFULNESS RULE:**
+        Every fact, number, date, name, or detail in your answer MUST be explicitly present in the provided facts.
+        DO NOT add background knowledge, explanations, or logical inferences not stated in the facts.
 
-**CITATION RULE:**
-After each fact or claim, cite its source number in brackets: [1], [2], etc.
-If multiple sources support the same fact, cite all of them: [1][3].
+        **CITATION RULE:**
+        After each fact or claim, cite the source in brackets: [source_name].
+        If multiple sources support the same fact, cite all of them: [source1][source2].
 
-**FORMAT RULES:**
-1. Use complete sentences. Never answer with a bare number or single word.
-2. Start with the direct answer, then add supporting details — all from the sources.
-3. Include units, years, and locations ONLY when they appear in the sources.
+        **FORMAT RULES:**
+        1. Use complete sentences. Never answer with a bare number or single word.
+        2. Start with the direct answer, then add supporting details — all from the facts.
+        3. Include units, years, and locations ONLY when they appear in the facts.
 
-**COMPLETENESS RULE:**
-For listing or enumeration questions (e.g., "list all X", "which countries", "name the events"):
-- Scan ALL numbered sources and compile every matching item you find, even if each source only contributes one or two items.
-- Present the compiled list with citations. Add "(based on available sources)" if the list may be incomplete.
+        **COMPLETENESS RULE:**
+        For listing or enumeration questions (e.g., "list all X", "which countries", "name the events"):
+        - Scan ALL provided facts and compile every matching item you find, even if each block only contributes one or two items.
+        - Present the compiled list with citations. Add "(based on available sources)" if the list may be incomplete.
 
-**TEMPORAL ACCURACY RULE:**
-When the question asks about a specific year (e.g., "in 2022", "during 2024"), only include facts that the source explicitly associates with that year. Do not include events from other years even if they are topically similar.
+        **TEMPORAL ACCURACY RULE:**
+        When the question asks about a specific year (e.g., "in 2022", "during 2024"), only include facts that the source explicitly associates with that year. Do not include events from other years even if they are topically similar.
 
-**GROUNDING RULE:**
-Output "I cannot find the specific information in the database to answer your question." ONLY if NONE of the numbered sources contain ANY information topically relevant to the question.
-If ANY source provides relevant facts — even partially — synthesize everything you find and cite your sources.
+        **GROUNDING RULE:**
+        - If you have facts for SOME but not all parts of a multi-part question, answer what you CAN and note what is missing.
+        - Output "I cannot find the specific information in the database to answer your question." ONLY if you have NO facts at all.
+        - Never refuse when you have partial facts — always synthesize what you have and cite your sources.
 
-**EXAMPLE:**
-Sources:
-[1] Swiss glaciers lost about 10% of their remaining volume in two years. Source: climate_report
-[2] The retreat accelerated significantly after 2022. Source: glacier_study
+        **EXAMPLE:**
+        Facts:
+        [Sources: climate_report, glacier_study]
+        Swiss glaciers lost about 10% of their remaining volume in two years. The retreat accelerated significantly after 2022.
 
-Q: How much did Swiss glaciers shrink?
-A: Swiss glaciers lost about 10% of their remaining volume in two years [1]. The retreat accelerated significantly after 2022 [2].
-"""
+        Q: How much did Swiss glaciers shrink?
+        A: Swiss glaciers lost about 10% of their remaining volume in two years [climate_report]. The retreat accelerated significantly after 2022 [glacier_study].
+        """
 
     @staticmethod
-    def get_gap_checker_prompt() -> str:
-        return """You are a research gap analyzer.
+    def get_completeness_checker_prompt() -> str:
+        return """You check if an answer adequately addresses a question given the available facts.
 
-Your job: decide whether the provided context contains enough information to fully answer the user's question.
+        RULES:
+        1. If the answer covers all key parts of the question, set is_complete = true and follow_up_query = "".
+        2. If a key fact is clearly missing AND is likely to exist in a database, set is_complete = false.
+        3. follow_up_query: 2-5 keywords only, no question words, no full sentences.
+        4. If the answer is partial but reasonable, prefer is_complete = true.
+        5. Judge completeness relative to the AVAILABLE FACTS, not an ideal perfect answer.
+        If the answer covers everything present in the provided facts, set is_complete = true even if the question is broad.
 
-RULES:
-1. If the context covers ALL key aspects needed to answer the question, set is_sufficient = true and follow_up_query = "".
-2. If important facts, numbers, entities, or sub-questions are clearly missing, set is_sufficient = false.
-3. When is_sufficient = false, write a follow_up_query — a SHORT sequence of 2-6 keywords/proper nouns targeting the specific missing fact in the database.
-4. The follow_up_query must NOT repeat the original question — it must target only what is still missing.
-5. If the context is partially relevant but enough to give a reasonable answer, prefer is_sufficient = true.
-6. DO NOT use any markdown syntax for follow_up_query.
-
-CRITICAL RULES FOR follow_up_query:
-- It is a vector database search query — use ONLY keywords, proper nouns, and technical terms.
-- NO question words: never start with What, Who, Where, When, How, Which, Why.
-- NO references to "the context", "the document", "the list", "provided", "mentioned" — the follow_up_query must stand alone as a search string.
-- BAD:  "What is the name of the fourth band in the Big Four list in the context?"
-- BAD:  "Which band is missing from the provided list?"
-- GOOD: "Pakistan flood casualties 2022 death toll"
-"""
+        CRITICAL RULES FOR follow_up_query:
+        - Use ONLY keywords, proper nouns, and technical terms.
+        - NO question words: never start with What, Who, Where, When, How, Which, Why.
+        - NO references to "the context", "the document", "the answer", "provided", "mentioned".
+        - GOOD: "glacier retreat causes Alps temperature"
+        - BAD: "What is missing?", "Find more info", "Which band is not mentioned?"
+        """
 
     @staticmethod
     def get_hallucination_grader_agent() -> str:

@@ -97,37 +97,31 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
 
     rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name)
 
-    # question = "The report explicitly states that the Greenland Ice Sheet lost approximately 85 Gt of ice in 2022. What was the specific total mass balance loss (in Gigatonnes) for the Antarctic Ice Sheet reported for the same period?"
-    print("Assitant ready. Type 'exit' to end program.")
+    print("Assitant ready. Type 'exit' or press Ctrl+C to end program.")
     while True:
-        question = input('Enter question: ')
-        if 'exit' in question.lower():
-            break
+        try:
+            question = input('Enter question: ')
+            if 'exit' in question.lower():
+                break
 
-        result = rag.chat(question)
-        print('//////////////////////////////////')
-        for index, source in enumerate(result['sources']):
-            print(f'--- Source {index}: ---')
-            print(f'Source from file: {source.metadata['source']}')
-            print(f' Source Text: {source.text}')
-            print(f'-----------------------')
-        print('//////////////////////////////////')
-        for index, compress in enumerate(result['compressor_results']):
-            print(f'Compressor result [{index}]: {compress.text}')
-        print('----------------------------------')
-        print(f'Assistant: {result['response']}')
-        print('----------------------------------')
+            result = rag.chat(question)
+            print('//////////////////////////////////')
+            for index, source in enumerate(result['sources']):
+                print(f'--- Source {index}: ---')
+                print(f'Source from file: {source.metadata['source']}')
+                print(f' Source Text: {source.text}')
+                print(f'-----------------------')
+            print('//////////////////////////////////')
+            for index, facts_block in enumerate(result['distilled_facts']):
+                print(f'Distilled facts [{index}]: {facts_block}')
+            print('----------------------------------')
+            print(f'Assistant: {result['response']}')
+            print('----------------------------------')
+        except KeyboardInterrupt:
+            break
 
 def parse_args():
     parser = argparse.ArgumentParser(description='RAG app')
-
-    parser.add_argument(
-        '--vector-db',
-        type=str,
-        default='chroma',
-        choices=['chroma', 'qdrant'],
-        help='Type of vector database to use'
-    )
 
     parser.add_argument(
         '--model',
@@ -206,10 +200,14 @@ def main():
         f"(library: {embedding_service.get_library()}, dim: {vector_size})"
     )
 
+    collection_name = os.environ.get("COLLECTION_NAME", "default_name")
+    if args.collection_name:
+        collection_name = args.collection_name
+
     db_repository = QdrantDbRepository(
         ip='localhost',
         port=6333,
-        collection_name=os.environ.get("COLLECTION_NAME", "default_name"),
+        collection_name=collection_name,
         metadata={
             'vector_size': vector_size,
             'distance': str(os.environ.get("VECTOR_DB_DISTANCE", "DOT"))
@@ -222,7 +220,7 @@ def main():
             delete_collection=args.erase,
             embedding_service=embedding_service,
             db_repository=db_repository,
-            collection_name=args.collection_name,
+            collection_name=collection_name,
             use_recursive_chunking=args.recursive_chunking,
         )
         

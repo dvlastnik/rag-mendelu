@@ -187,3 +187,5 @@ tests/rag/results/*
 
 # evaluation matrix
 evaluation_matrix.csv
+
+.DS_store
