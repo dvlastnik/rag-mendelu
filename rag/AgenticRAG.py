@@ -35,9 +35,11 @@ class AgenticRAG:
             'search_results': [],
             'extracted_data': [],
             'filtered_results': [],
+            'distilled_facts': [],
+            'completeness_follow_up_query': '',
             'hallucination_status': None
         }
-        
+
         try:
             final_state = self.agents.invoke(initial_state, config={"recursion_limit": 50})
             last_message = final_state['messages'][-1]
@@ -50,14 +52,15 @@ class AgenticRAG:
                 'extracted_data': final_state['extracted_data'],
                 'response': last_message.content,
                 'sources': final_state['filtered_results'],
-                'compressor_results': final_state['context_compressor_results']
+                'distilled_facts': final_state.get('distilled_facts', []),
             }
-            
+
         except Exception as e:
             traceback.print_exc()
             logger.error(f"Agent Workflow Failed: {e}")
             return {
                 'agent_state': initial_state,
                 'response': f"I encountered an error while processing your request: {str(e)}",
-                'sources': []
+                'sources': [],
+                'distilled_facts': [],
             }

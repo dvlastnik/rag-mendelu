@@ -4,11 +4,9 @@ from langchain_core.messages import HumanMessage, AIMessage
 
 from rag.agents.enums import Intent
 from rag.agents.models import (
-    GeneralOrRagDecision, 
-    MultiExtraction, 
-    GradeDocuments, 
-    GradeHallucinations, 
-    ExtractionScheme 
+    GeneralOrRagDecision,
+    GradeDocuments,
+    GradeHallucinations,
 )
 from rag.agents.graph import build_graph 
 
@@ -39,27 +37,18 @@ def setup_mock_llm():
 
     def structured_side_effect(schema, **kwargs):
         mock_runnable = MagicMock()
-        
+
         schema_name = getattr(schema, "__name__", str(schema))
 
         if "GeneralOrRagDecision" in schema_name:
             mock_runnable.invoke.return_value = GeneralOrRagDecision(intent=Intent.RAG)
-        
-        elif "MultiExtraction" in schema_name:
-            t = ExtractionScheme(
-                city="Brno", 
-                year="2024", 
-                topics=["floods"], 
-                country="Czechia"
-            )
-            mock_runnable.invoke.return_value = MultiExtraction(targets=[t])
-            
+
         elif "GradeDocuments" in schema_name:
             mock_runnable.invoke.return_value = GradeDocuments(is_relevant="yes")
-            
+
         elif "GradeHallucinations" in schema_name:
             mock_runnable.invoke.return_value = GradeHallucinations(is_relevant="yes")
-            
+
         return mock_runnable
 
     mock_llm.with_structured_output.side_effect = structured_side_effect
@@ -77,8 +66,6 @@ def test_integration_rag_happy_path(mock_init, mock_deps):
     final_state = app.invoke(inputs)
 
     assert "Final Answer: There were floods in Brno." in final_state['messages'][-1].content
-    assert len(final_state['extracted_data']) == 1
-    assert final_state['extracted_data'][0].city == "Brno"
     assert final_state['hallucination_status'] == 'clean'
 
 @patch("rag.agents.graph.init_chat_model")
@@ -92,9 +79,6 @@ def test_integration_rag_extraction_failure(mock_init, mock_deps):
         mock_runnable = MagicMock()
         if schema == GeneralOrRagDecision:
             mock_runnable.invoke.return_value = GeneralOrRagDecision(intent=Intent.RAG)
-        elif schema == MultiExtraction:
-            # RETURN EMPTY TARGETS
-            mock_runnable.invoke.return_value = MultiExtraction(targets=[])
         return mock_runnable
 
     mock_llm.with_structured_output.side_effect = structured_side_effect

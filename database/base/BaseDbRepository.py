@@ -70,6 +70,10 @@ class BaseDbRepository(ABC):
     def if_collection_exist_delete(self) -> DbOperationResult:
         pass
 
+    def scroll_all_by_source(self, source: str, limit: int = 500) -> List[MyDocument]:
+        """Returns all documents from a given source, up to limit. Override in subclasses."""
+        return []
+
     @classmethod
     def check_count_for(cls, repo_cls: Type["BaseDbRepository"], ip: str, port: int, collection_name: str, metadata: Dict = {}) -> None:
         repository = repo_cls(ip=ip, port=port, collection_name=collection_name, metadata=metadata)

@@ -129,9 +129,13 @@ def test_rag_quality(data, judge):
         'id': data['id'],
         'question': data['question'],
         'answer': data['generated_answer'],
+        'original_query': data.get('original_query', ''),
         'extracted_data': data['extracted_data'],
         'retrieved_sources': data['retrieved_sources'],
+        'distilled_facts': data.get('distilled_facts', []),
         'rewritten_queries': data['rewritten_queries'],
+        'retrieval_iterations': data.get('retrieval_iterations', 0),
+        'completeness_follow_up_query': data.get('completeness_follow_up_query', ''),
         'true_answer': data['ground_truth'],
         'scores': {
             'relevancy': eval_result.relevancy_score,
