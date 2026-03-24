@@ -145,40 +145,49 @@ When you ask a question, a pipeline of agents collaborates:
 - **Hallucination Grader**: Verifies the answer is grounded in the retrieved context. Retries with the Synthesizer up to 2 times if hallucinations are detected.
 
 ```mermaid
-graph TD
-    Start([Start]):::first
-    router(Router)
-    general(General Agent)
-    planner(Query Planner)
-    analytical(Analytical Query)
-    worker(Research Worker)
-    scroll(Scroll Retriever)
-    grader(Retrieval Grader)
-    extractor(Fact Extractor)
-    synth(Synthesizer)
-    completeness(Completeness Checker)
-    hallucination(Hallucination Grader)
-    error(Error)
-    End([End]):::last
-
-    Start --> router
-    router -.->|General| general
-    router -.->|RAG| planner
-    general --> End
-    planner -.->|SQL / Hybrid| analytical
-    planner -.->|Vector| worker
-    planner -.->|Scroll| scroll
-    planner -.->|Error| error
-    analytical -.->|SQL result| synth
-    analytical -.->|Hybrid| worker
-    worker --> grader
-    scroll --> extractor
-    grader --> extractor
-    extractor --> synth
-    synth --> completeness
-    completeness -.->|Sufficient| hallucination
-    completeness -.->|Gap found| worker
-    hallucination -.->|Grounded| End
-    hallucination -.->|Hallucinated| synth
-    error --> End
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+        __start__([<p>__start__</p>]):::first
+        router_agent(router_agent)
+        general_agent(general_agent)
+        query_planner_agent(query_planner_agent)
+        analytical_query_agent(analytical_query_agent)
+        research_worker(research_worker)
+        retrieval_grader_agent(retrieval_grader_agent)
+        fact_extractor_agent(fact_extractor_agent)
+        synthesizer_agent(synthesizer_agent)
+        completeness_checker_agent(completeness_checker_agent)
+        hallucination_grader_agent(hallucination_grader_agent)
+        scroll_retriever(scroll_retriever)
+        error_agent(error_agent)
+        __end__([<p>__end__</p>]):::last
+        
+        __start__ --> router_agent;
+        analytical_query_agent -. " NodeName.RESEARCH_WORKER " .-> research_worker;
+        analytical_query_agent -. " NodeName.SYNTHESIZER " .-> synthesizer_agent;
+        completeness_checker_agent -. " NodeName.HALLUCINATION_GRADER_AGENT " .-> hallucination_grader_agent;
+        completeness_checker_agent -. " NodeName.RESEARCH_WORKER " .-> research_worker;
+        fact_extractor_agent --> synthesizer_agent;
+        hallucination_grader_agent -.-> __end__;
+        hallucination_grader_agent -. " NodeName.SYNTHESIZER " .-> synthesizer_agent;
+        query_planner_agent -. " NodeName.ANALYTICAL_QUERY " .-> analytical_query_agent;
+        query_planner_agent -. " NodeName.ERROR " .-> error_agent;
+        query_planner_agent -. " NodeName.RESEARCH_WORKER " .-> research_worker;
+        query_planner_agent -. " NodeName.SCROLL_RETRIEVER " .-> scroll_retriever;
+        research_worker --> retrieval_grader_agent;
+        retrieval_grader_agent --> fact_extractor_agent;
+        router_agent -. " NodeName.GENERAL " .-> general_agent;
+        router_agent -. " NodeName.QUERY_PLANNER " .-> query_planner_agent;
+        scroll_retriever --> fact_extractor_agent;
+        synthesizer_agent --> completeness_checker_agent;
+        error_agent --> __end__;
+        general_agent --> __end__;
+        
+        classDef default fill:#f2f0ff,line-height:1.2
+        classDef first fill-opacity:0
+        classDef last fill:#bfb6fc
 ```
