@@ -2,15 +2,15 @@ import re
 import traceback
 import pathlib
 from typing import List, Dict, Optional
-
 import pandas as pd
-
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
 from etl.BaseEtl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
 from database.base.MyDocument import MyDocument, SparseVector
+from database.DuckDbRepository import DuckDbRepository
+from text_embedding.text_embedding_service import TextEmbeddingService
 from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
 from semantic_chunking.similiar_sentence_splitter import SimilarSentenceSplitter
@@ -28,7 +28,6 @@ _RE_SINGLE_NEWLINE = re.compile(r'(?<!\n)\n(?!\n)')
 _RE_MULTI_NEWLINE = re.compile(r'\n{3,}')
 _RE_MULTI_SPACE = re.compile(r'[ \t]+')
 
-# markdown syntax
 _RE_MD_BOLD = re.compile(r'\*\*(.+?)\*\*|__(.+?)__', re.DOTALL)
 _RE_MD_ITALIC = re.compile(r'\*(.+?)\*', re.DOTALL)
 _RE_MD_CODE = re.compile(r'`(.+?)`', re.DOTALL)
@@ -55,11 +54,13 @@ class GeneralEtl(BaseEtl):
         self,
         filepath: str,
         db_repositories: Dict,
-        embedding_service,
+        embedding_service: TextEmbeddingService,
+        duck_db_repo: DuckDbRepository,
         use_semantic: bool = True,
     ) -> None:
         super().__init__(filepath, db_repositories, embedding_service)
         self.use_semantic = use_semantic
+        self.duck_db_repo = duck_db_repo
         self.table_processor = TableProcessor()
 
         self.splitter = RecursiveCharacterTextSplitter(
@@ -136,6 +137,17 @@ class GeneralEtl(BaseEtl):
                         metadata=table_meta,
                     ))
 
+            if self.duck_db_repo is not None and table_documents:
+                _INTERNAL = {'is_table', 'source', 'file_type'}
+                rows = [
+                    {k: v for k, v in doc['metadata'].items() if k not in _INTERNAL}
+                    for doc in table_documents
+                ]
+                non_empty = [r for r in rows if r]
+                if non_empty:
+                    df = pd.DataFrame(non_empty)
+                    self.duck_db_repo.register_dataframe(self.file.stem, df)
+
             logger.info(f"Transform complete: {len(self.documents)} documents from '{self.file.name}'")
             self.state = ETLState.TRANSFORMED
 
@@ -199,8 +211,8 @@ class GeneralEtl(BaseEtl):
             text = " | ".join(parts)
             texts.append(text)
             row_metadatas.append({
-                **base_metadata,
                 **row_meta,
+                **base_metadata,
                 'row_index': int(row_index),
                 'text': text,
             })
@@ -231,6 +243,13 @@ class GeneralEtl(BaseEtl):
 
         logger.info(f"Tabular transform complete: {len(self.documents)} documents from '{self.file.name}'")
 
+        if self.duck_db_repo is not None:
+            suffix = self.file.suffix.lower()
+            if suffix == '.csv':
+                self.duck_db_repo.register_csv(self.file.stem, str(self.file.resolve()))
+            elif suffix == '.xlsx':
+                self.duck_db_repo.register_xlsx(self.file.stem, str(self.file.resolve()))
+
     @staticmethod
     def _coerce_value(val) -> int | float | bool | str:
         """Convert a pandas cell value to a JSON-serialisable Python primitive."""
@@ -239,7 +258,6 @@ class GeneralEtl(BaseEtl):
         if isinstance(val, (int,)):
             return int(val)
         if isinstance(val, float):
-            # Store whole-number floats as int for cleaner metadata (e.g. 9.0 → 9)
             return int(val) if val == int(val) else float(val)
         return str(val)
 
@@ -269,7 +287,6 @@ class GeneralEtl(BaseEtl):
 
     def _clean_text(self, text: str) -> str:
         """Generic text cleaning — strips markdown syntax and normalises whitespace."""
-        # Strip markdown formatting (order matters: bold before italic)
         text = _RE_MD_HRULE.sub('', text)
         text = _RE_MD_BLOCKQUOTE.sub('', text)
         text = _RE_MD_LINK.sub(r'\1', text)
@@ -277,7 +294,6 @@ class GeneralEtl(BaseEtl):
         text = _RE_MD_BOLD.sub(lambda m: m.group(1) or m.group(2), text)
         text = _RE_MD_ITALIC.sub(r'\1', text)
 
-        # General cleanup
         text = _RE_HTML_COMMENT.sub('', text)
         text = text.replace('\x00', '').replace('\xa0', ' ')
         text = _RE_HYPHENATION.sub(r'\1\2', text)

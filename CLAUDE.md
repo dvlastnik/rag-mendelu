@@ -54,18 +54,18 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 
 **Supported file types (`GeneralEtl`):**
 
-| Extension | Processing |
-|---|---|
-| `.pdf`, `.docx`, `.pptx` | Docling `DocumentConverter` → Markdown → header-split → semantic/recursive chunk → embed |
-| `.md`, `.txt` | Copied to `data/general/` → same Markdown pipeline as above |
-| `.csv`, `.xlsx` | **Row-per-document**: each row → pipe-delimited text + all column values as typed metadata; embedded directly, no chunking |
+| Extension | Qdrant | DuckDB | Notes |
+|---|---|---|---|
+| `.pdf`, `.docx`, `.pptx` | Text chunks + table rows | Extracted tables (one row per table row, columns as fields) | Docling `DocumentConverter` → Markdown → table extract → header-split → semantic/recursive chunk → embed |
+| `.md`, `.txt` | Text chunks + table rows | Extracted tables | Copied to `data/general/` → same Markdown pipeline as above |
+| `.csv`, `.xlsx` | **Row-per-document**: each row → pipe-delimited text + all column values as typed metadata; no chunking | Full file registered as DuckDB table for SQL aggregation | All columns stored as typed metadata in both stores |
 
 CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name": "Split Fiction", "category": "Co-op Adventure", "review": 9.4, "row_index": 13, "text": "name: Split Fiction | ...", ...}` — column names become metadata keys dynamically from headers, enabling Qdrant numeric/keyword filtering per dataset.
 
 **`rag/agents/`** — Agentic RAG using LangGraph
 - `AgenticRAG(database_service, embedding_service, model_name)` → main entry point
-- `AgenticRAG.chat(question)` → returns `{response, sources, rewritten_queries, extracted_data, compressor_results}`
-- Graph nodes in `rag/agents/nodes/`: `general_nodes.py` (Router, General), `rag_nodes.py` (QueryRewriter, Extractor, ResearchWorker, RetrievalGrader, ContextCompressor, GapChecker, Synthesizer, HallucinationGrader, Error)
+- `AgenticRAG.chat(question)` → returns `{response, sources, rewritten_queries, sql_result, distilled_facts}`
+- Graph nodes in `rag/agents/nodes/`: `general_nodes.py` (Router, General), `rag_nodes.py` (QueryPlanner, AnalyticalQuery, ScrollRetriever, ResearchWorker, RetrievalGrader, FactExtractor, Synthesizer, CompletenessChecker, HallucinationGrader, Error)
 - State is `AgentState` in `rag/agents/state.py`
 
 **`metadata_extractor/`** — Standalone LangGraph sub-graph
@@ -75,6 +75,7 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 **`database/`** — Storage abstraction
 - `BaseDbRepository` (ABC) → defines the interface: `connect`, `search`, `insert`, `delete`, `get_count`, etc.
 - `QdrantDbRepository` → production implementation with hybrid search (dense + sparse)
+- `DuckDbRepository` → embedded DuckDB for analytical SQL queries on tabular data; key methods: `register_csv`, `register_xlsx`, `register_dataframe` (in-memory DataFrame), `run_select`, `get_compact_catalog`, `drop_table`
 - `MyDocument` → internal document model with `id`, `text`, `embedding`, `sparse_embedding`, `metadata`
 
 **`text_embedding/`** — In-process embedding module (no HTTP/Docker required)
@@ -103,7 +104,7 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 
 ### Key Data Flow
 
-**ETL (GeneralEtl):** Any file → `BaseEtl.extract()` (converter registry) → Markdown in `data/general/` → `GeneralEtl.transform()` (extract tables, split by H1–H4 headers, clean, semantic/recursive chunk, embed) → Qdrant
+**ETL (GeneralEtl):** Any file → `BaseEtl.extract()` (converter registry) → Markdown in `data/general/` → `GeneralEtl.transform()` (extract tables → Qdrant + DuckDB, split by H1–H4 headers, clean, semantic/recursive chunk, embed) → Qdrant. For CSV/XLSX: original file also registered in DuckDB via `register_csv`/`register_xlsx`. For PDF/DOCX/MD/TXT: extracted tables registered via `register_dataframe`.
 
 **ETL metadata per chunk (documents):** `source` (filename stem), `file_type` (no leading dot, e.g. `pdf`), `header_path`, `headers`, `is_table`, `chunk_index`
 
@@ -111,15 +112,15 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 
 **`_clean_text()` in `GeneralEtl`** strips markdown syntax before embedding: `**bold**`/`__bold__` → plain text, `*italic*` → plain text, `` `code` `` → plain text, `[text](url)` → `text`, `> blockquote` → text, `---` horizontal rules removed. Underscore-italic (`_text_`) is intentionally left alone to avoid corrupting filenames and identifiers.
 
-**RAG query:** User question → Router → (General path OR RAG path: QueryRewriter → ResearchWorker → RetrievalGrader → ContextCompressor → GapChecker → [loop back to ResearchWorker ≤3×] → Synthesizer → HallucinationGrader) → Answer
+**RAG query:** User question → Router → (General path OR RAG path: QueryPlanner → [SQL/HYBRID → AnalyticalQuery] / [VECTOR → ResearchWorker] / [SCROLL → ScrollRetriever] → RetrievalGrader → FactExtractor → Synthesizer → CompletenessChecker → [loop back to ResearchWorker ≤3×] → HallucinationGrader) → Answer
 
 ### Notes
 - `constants.py` defines collection names (`COLLECTION_NAME_DROUGH = 'drough'`)
-- `--vector-db` flag exists in main.py but only `qdrant` is actively used
 - Tests in `tests/rag/` require infrastructure running and a populated Qdrant collection
 - `DroughtEtl` is retained for the climate dataset but `GeneralEtl` is the active default
-- Reranker in `rag_nodes.py` (`retrieval_grader_agent`) keeps top **10** docs after reranking
-- Re-indexing required when changing chunk parameters: `uv run main.py --run-etl --erase --path <folder>`
+- Reranker top-N is adaptive via `ModelParams.create_from_context_window()` — not a fixed 10
+- Re-indexing required when changing chunk parameters or switching embedding models: `uv run main.py --run-etl --erase --path <folder>`
+- DuckDB file is stored at `data/sql/tabular.duckdb`; `--erase` drops all DuckDB tables alongside the Qdrant collection
 
 ### Document Metadata Schema
 
@@ -136,32 +137,38 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 
 ### RAG Agent — Node Details
 
-**QueryRewriter** — Generates 2 alternative queries (keyword + conceptual) from the original question, maintaining conversation history for follow-up questions. Always keeps original as query #1.
+**Router** — Classifies query intent: `general`, `rag`, `rag_exhaustive`, or `rag_summarization`. Uses keyword fallback (`_keyword_intent_upgrade`) for small models that miss exhaustive/summarization patterns.
 
-**ResearchWorker** — Parallel workers (one per query × one per extracted target). Strategy waterfall: Strict (year+location) → Year-only → Location-only → Pure Vector Search. Fetches up to 50 docs per strategy, stops when sufficient.
+**QueryPlanner** — Selects a retrieval strategy (`VECTOR`, `SQL`, `HYBRID`, `SCROLL`) and generates vector search queries. Detects aggregation intent and identifies the target source/dataset. Routes to the appropriate downstream node.
 
-**RetrievalGrader (reranker)** — Uses FlashRank (`ms-marco-MiniLM-L-12-v2`) to rerank all accumulated `search_results` by relevance to the original question. Deduplicates by doc ID, keeps top 10.
+**AnalyticalQuery** — Generates and executes a SQL query against DuckDB using `get_compact_catalog()` for schema context. For `HYBRID` strategy, passes SQL results to ResearchWorker for further vector refinement.
 
-**ContextCompressor** — For each of the top-10 docs, asks the LLM to extract only verbatim sentences relevant to the query. Includes a `difflib.SequenceMatcher` hallucination guard: if the compressed output has similarity < 0.15 to the original, the original is kept unchanged. This catches cases where the LLM generates a summary instead of extracting.
+**ScrollRetriever** — Fetches all chunks from a specific source (used for `SCROLL` strategy / summarization queries), then reranks the top-N and passes to FactExtractor.
 
-**GapChecker** — After compression, checks if the accumulated context is sufficient to fully answer the question. If not (and `retrieval_iterations < 3`), generates a keyword-focused follow-up search query and loops back to ResearchWorker. Key behaviours:
-- `context_compressor_results` accumulates across all gap iterations (via `operator.add`) — synthesizer sees everything found
+**ResearchWorker** — Parallel hybrid search workers in Qdrant, one per query. Strategy waterfall: Strict (year+location) → Year-only → Location-only → Pure Vector Search. Fetches up to 50 docs per strategy, stops when sufficient.
+
+**RetrievalGrader (reranker)** — Uses FlashRank (`ms-marco-MiniLM-L-12-v2`) to rerank all accumulated `search_results` by relevance to the original question. Deduplicates by doc ID, keeps top 10. Top-N is adaptive based on model context window via `ModelParams`.
+
+**FactExtractor** — Batched LLM extraction: for each batch of top docs, asks the LLM to extract only verbatim sentences relevant to the query. Includes a `difflib.SequenceMatcher` hallucination guard: if the compressed output has similarity < 0.15 to the original, the original is kept unchanged.
+
+**Synthesizer** — Builds numbered source list from deduplicated `distilled_facts`, synthesizes with strict citation, faithfulness, and temporal accuracy rules.
+
+**CompletenessChecker** — After synthesis, checks if the accumulated context is sufficient to fully answer the question. If not (and `retrieval_iterations < 3`), generates a keyword-focused follow-up query and loops back to ResearchWorker. Key behaviours:
+- `distilled_facts` accumulates across all gap iterations — synthesizer sees everything found
 - Deduplicates by doc ID before evaluating context
 - Injects previous follow-up query into prompt so model generates a different angle
 - Detects if model repeats the same query → immediately stops the loop
 - `follow_up_query` must be keywords/proper nouns only — no question words, no references to "the context"
 
-**Synthesizer** — Builds numbered source list from deduplicated `context_compressor_results`, synthesizes with strict citation, faithfulness, and temporal accuracy rules.
-
-**HallucinationGrader** — Verifies answer is grounded in the compressed context. Up to 2 retries before returning a fallback error message.
+**HallucinationGrader** — Verifies answer is grounded in the distilled facts. Up to 2 retries before returning a fallback error message.
 
 ### RAG Prompt Design
 Key rules currently in effect in `rag/agents/prompts.py`:
 - **COMPLETENESS RULE** (Synthesizer): For enumeration/listing questions, compile from *all* retrieved sources rather than stopping at the first match
 - **TEMPORAL ACCURACY RULE** (Synthesizer): Only include facts explicitly associated with the requested year
 - **GROUNDING RULE** (Synthesizer): Refuse only when *none* of the sources are topically relevant — do not refuse because the answer is partial
-- **VERBATIM RULE** (ContextCompressor): When uncertain, return the document unchanged — never paraphrase or summarise
-- **VECTOR QUERY RULE** (GapChecker): `follow_up_query` must be keyword-based for vector search — no question words, no self-referential phrases
+- **VERBATIM RULE** (FactExtractor): When uncertain, return the document unchanged — never paraphrase or summarise
+- **VECTOR QUERY RULE** (CompletenessChecker): `follow_up_query` must be keyword-based for vector search — no question words, no self-referential phrases
 
 ### Test Report Metrics
 `test_rag_custom.py` computes ML metrics per test session using a 2D confusion matrix where TP = relevancy ≥ 4 AND faithfulness ≥ 4:
@@ -172,53 +179,23 @@ Key rules currently in effect in `rag/agents/prompts.py`:
 
 ## Possible Future Improvements
 
-### 1. Analytical Search Tool (Highest Priority)
-**Problem:** Vector search is a "find similar" engine, not "scan and aggregate". Queries like "which game has the highest score?" require MAX/MIN/COUNT over all rows — something that is structurally impossible with top-k vector retrieval.
-
-**Proposed solution:**
-- Add `QdrantDbRepository.scroll_all_by_source(source, limit=500)` using Qdrant's scroll API to fetch ALL documents from a named source, bypassing similarity entirely
-- Detect aggregation intent keywords in the research_worker or as a new `AnalyticalSearch` node: `highest, lowest, maximum, minimum, most, least, rank, top N, average, count, how many, all X in`
-- When aggregation + source detected → scroll all docs, skip the top-10 reranker cap, pass full result set to synthesizer
-- Add a `source` field to `ExtractionScheme` so the extractor can identify which dataset the query targets (e.g. `"2025 list"` → `games_2025`)
-- Falls back gracefully to normal vector search for non-aggregation queries
-
-### 2. Agent Tools (LangChain/LangGraph Tool Calls)
-Convert the agent from a fixed pipeline to a tool-calling agent that can invoke specialized tools on demand:
-
-| Tool | Purpose |
-|---|---|
-| `vector_search(query, filters)` | Standard hybrid search — what the agent does today |
-| `scroll_all(source, filter_field, filter_value)` | Fetch ALL rows from a source; needed for MAX/MIN/COUNT/LIST-ALL queries |
-| `numeric_filter_search(source, field, op, value)` | Qdrant payload filter: e.g. `review >= 9.0` on games_2025 |
-| `keyword_search(source, keyword)` | Full-text/payload keyword match against a specific source |
-| `get_document_outline(source)` | Return header structure of a source file; useful for "what topics does X cover?" |
-| `compute_aggregate(source, field, operation)` | Python-side MAX/MIN/AVG/COUNT over all scrolled rows of a source |
-| `cross_source_join(query, sources)` | Search multiple named sources and merge results with source attribution |
-
-### 3. Context Compressor — Remove or Replace
-The LLM-based compressor adds significant latency (10 LLM calls per query) and fails frequently with smaller models that generate summaries instead of extracting verbatim text. The `difflib` similarity guard already catches most hallucinations, but that means compression is bypassed for ~50% of docs anyway.
+### 1. Fact Extractor — Remove or Replace
+The LLM-based extractor adds significant latency and fails frequently with smaller models that generate summaries instead of extracting verbatim text. The `difflib` similarity guard already catches most hallucinations, but that means extraction is bypassed for a large share of docs anyway.
 
 **Options:**
 - **Remove entirely** — pass full reranked chunks directly to synthesizer; simplest and most reliable
 - **Rule-based sentence extractor** — select sentences containing query keywords using BM25 or TF-IDF; zero hallucination risk, near-zero latency
-- **Raise minimum doc length** — only compress if `len(doc.text) > 800`; skip short, already-concise chunks
+- **Raise minimum doc length** — only extract if `len(doc.text) > 800`; skip short, already-concise chunks
 
-### 4. Smarter Reranking Cutoff
-The reranker currently takes a hard top-10 regardless of score distribution. Improvements:
+### 2. Smarter Reranking Cutoff
+The reranker currently uses an adaptive top-N based on context window size, but still applies a hard cap regardless of score distribution. Improvements:
 - Score-gap detection: keep all docs within X% of the top score rather than a fixed count
-- Adaptive cutoff: for listing/enumeration questions detected at query rewrite time, raise cap to 20–30
+- Adaptive cutoff: for listing/enumeration questions, raise cap further
 
-### 5. Query Classification at Router
-Extend the router to classify not just `rag` vs `general` but also query type:
-- `factual` — single-answer lookup → standard vector search
-- `aggregation` — MAX/MIN/COUNT/LIST-ALL → analytical search path
-- `comparison` — multi-entity contrast → multi-target parallel workers
-- `conversational` → general agent
+### 3. Metadata-Aware Numeric Filtering
+For CSV/XLSX sources, the ETL already stores typed numeric values as Qdrant payload fields. The QueryPlanner could identify when a query targets a numeric condition (`review > 9`) and build a Qdrant `Range` filter directly, bypassing similarity entirely for the numeric dimension.
 
-### 6. Metadata-Aware Numeric Filtering
-For CSV/XLSX sources, the ETL already stores typed numeric values as Qdrant payload fields. The extractor could identify when a query targets a numeric condition (`review > 9`, `row_index between 10 and 20`) and build a Qdrant `Range` filter directly, bypassing similarity entirely for the numeric dimension.
-
-### 7. Hallucination Grader Improvement
+### 4. Hallucination Grader Improvement
 The current grader uses a binary yes/no LLM call which is unreliable for small models. Alternatives:
 - **NLI-based grader**: use a local Natural Language Inference model (e.g. `cross-encoder/nli-deberta-v3-small`) to score each claim in the answer against the source passages — deterministic, fast, no LLM call needed
 - **Sentence-level citation check**: for each sentence in the answer, verify that a supporting source sentence exists above a cosine similarity threshold

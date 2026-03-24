@@ -5,6 +5,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 
 from database.base.BaseDbRepository import BaseDbRepository
+from database.DuckDbRepository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from rag.agents.graph import build_graph
 from utils.logging_config import get_logger
@@ -16,10 +17,11 @@ class AgenticRAG:
         self,
         database_service: BaseDbRepository,
         embedding_service: TextEmbeddingService,
+        duck_db_repo: DuckDbRepository,
         model_name: str = "llama3.1:8b",
     ):
         logger.info(f"Agentic RAG configured with {model_name}")
-        self.agents = build_graph(database_service, embedding_service, model_name)
+        self.agents = build_graph(database_service, embedding_service, model_name, duck_db_repo=duck_db_repo)
         
 
     def chat(self, question: str) -> Dict[str, Any]:
@@ -32,27 +34,26 @@ class AgenticRAG:
         initial_state = {
             'messages': [HumanMessage(content=question)],
             'rewritten_queries': [],
+            'query_plan': None,
+            'sql_result': None,
             'search_results': [],
             'extracted_data': [],
             'filtered_results': [],
             'distilled_facts': [],
             'completeness_follow_up_query': '',
-            'hallucination_status': None
+            'hallucination_status': None,
         }
 
         try:
             final_state = self.agents.invoke(initial_state, config={"recursion_limit": 50})
             last_message = final_state['messages'][-1]
 
-            rewritten_queries = final_state.get('rewritten_queries', [])
             return {
                 'agent_state': final_state,
                 'original_query': question,
-                'rewritten_queries': rewritten_queries,
-                'extracted_data': final_state['extracted_data'],
                 'response': last_message.content,
                 'sources': final_state['filtered_results'],
-                'distilled_facts': final_state.get('distilled_facts', []),
+                'distilled_facts': final_state['distilled_facts']
             }
 
         except Exception as e:

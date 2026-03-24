@@ -29,15 +29,15 @@
     },
     {
         "id": 5,
-        "question": "Was the T-Rex the biggest meat-eating dinosaur?",
-        "response": "No, it was not. While Tyrannosaurus rex was the largest of its family, Spinosaurus aegyptiacus is considered the largest known terrestrial carnivore, exceeding even T. rex in length.",
-        "source": ["dinosaurs.md"],
+        "question": "What is the most anticipated game of 2026, and what setting does it take place in?",
+        "response": "Grand Theft Auto VI is described as the single most anticipated release of 2026. It takes players back to a massive, modern reimagining of Vice City and the state of Leonida.",
+        "source": ["games_2026.csv"],
         "difficulty": "easy"
     },
     {
         "id": 6,
         "question": "I want to play a game set in the Middle Ages or Bohemia. Are there any on the 2025 list, and how does their setting relate to Jan Žižka?",
-        "response": "Yes, 'Kingdom Come: Deliverance 2' is an Action RPG set in 15th-century Bohemia. This is the exact same location and time period as the Hussite Wars, which were led by the Bohemian general Jan Žižka between 1419 and 1434. Additionally, 'Doom: The Dark Ages' features medieval hellish warfare.",
+        "response": "Yes, 'Kingdom Come: Deliverance 2' is an Action RPG set in 15th-century Bohemia. This is the exact same location and time period as the Hussite Wars, which were led by the Bohemian general Jan Žižka between 1419 and 1434.",
         "source": ["games_2025.csv", "hussite_wars.md"],
         "difficulty": "hard"
     },
@@ -65,16 +65,16 @@
     {
         "id": 10,
         "question": "Can you list the 14 Valar?",
-        "response": "The text notes there are fourteen Valar, but it only explicitly names seven of the most prominent ones: Manwë, Varda (Elbereth), Aulë, Ulmo, Yavanna, Mandos (Námo), and Melkor (Morgoth).",
+        "response": "The text notes there are fourteen Valar, but it only explicitly names eight: Manwë, Varda (Elbereth), Aulë, Ulmo, Yavanna, Mandos (Námo), Vairë (wife of Mandos, who weaves the tapestry of history), and Melkor (Morgoth). The remaining six Valar are not mentioned in the source document.",
         "source": ["lotr_lore.md"],
         "difficulty": "medium"
     },
     {
         "id": 11,
-        "question": "Which dinosaur had the most horns on its head?",
-        "response": "Kosmoceratops richardsoni holds the record for the most ornamented dinosaur skull. It possessed an astonishing 15 distinct horns and spikes on its head.",
-        "source": ["dinosaurs.md"],
-        "difficulty": "easy"
+        "question": "Are there any James Bond games releasing in both 2025 and 2026, and who developed them?",
+        "response": "Yes. In 2025, 'Project 007' is an Action Adventure game developed by IO Interactive — a James Bond origin story with a new Bond. In 2026, '007 First Light' is an Action/Stealth game developed by the creators of Hitman (also IO Interactive) — another Bond origin story detailing how a young James Bond earned his 00 status. Both are James Bond origin stories from the same developer.",
+        "source": ["games_2025.csv", "games_2026.csv"],
+        "difficulty": "hard"
     },
     {
         "id": 12,
@@ -85,7 +85,7 @@
     },
     {
         "id": 13,
-        "question": "How many games on the list have the word 'Survival' in their category?",
+        "question": "How many games on the 2025 list have the word 'Survival' in their category?",
         "response": "There are 8 games with 'Survival' in their category: Cronos: The New Dawn (Survival Horror), Subnautica 2 (Survival), The Alters (Sci-Fi Survival), Resident Evil 9 (Survival Horror), Abiotic Factor (Survival), Dune: Awakening (Survival MMO), Pacific Drive: New Horizons (Survival), and No Man's Sky: Worlds Part II (Survival).",
         "source": ["games_2025.csv"],
         "difficulty": "hard"
@@ -113,17 +113,17 @@
     },
     {
         "id": 17,
-        "question": "What's the difference between a Plesiosaur and a Pliosaur?",
-        "response": "The Plesiosauria clade is traditionally split into two morphological types: the long-necked plesiosauromorphs (which had small heads and long, flexible necks) and the short-necked, large-headed pliosauromorphs (which were apex predators with massive skulls and teeth for crushing large prey).",
-        "source": ["dinosaurs.md"],
+        "question": "Are there any stealth or spy games in both the 2025 and 2026 release lists?",
+        "response": "Yes. In 2025, 'Project 007' is a James Bond spy Action Adventure game by IO Interactive (score 7.9) and 'Syndicate of Shadows' is an isometric stealth game featuring a globe-trotting assassin (score 7.7). In 2026, '007 First Light' is an Action/Stealth espionage thriller also developed by the creators of Hitman.",
+        "source": ["games_2025.csv", "games_2026.csv"],
         "difficulty": "medium"
     },
     {
         "id": 18,
-        "question": "How many games feature wizards or magic, and how does that compare to the Istari?",
-        "response": "Several games in the 2025 list feature magic, including 'Hogwarts Legacy 2', 'Eternal Strands' (physics-driven magic combat), and 'Witchbrook' (magic school life-sim). In Middle-earth lore, wizards are called the Istari; unlike human wizards in games, the Istari are actually Maiar (angelic spirits) who took mortal form to assist the free peoples against Sauron, and were forbidden to use their power to dominate.",
+        "question": "What studio developed the 2025 co-op game 'Split Fiction', and in Tolkien's lore, what exactly are the Wizards — are they human?",
+        "response": "Split Fiction was developed by Hazelight Studios. In Tolkien's lore, the Wizards (Istari) are not human — they are Maiar, lesser angelic spirits who took mortal form and came to Middle-earth in the Third Age to guide the free peoples against Sauron. They were explicitly forbidden to dominate or rule, only to inspire and counsel. Gandalf (originally Olórin) was a Maia of Manwë and Varda, particularly associated with pity and wisdom.",
         "source": ["games_2025.csv", "lotr_lore.md"],
-        "difficulty": "hard"
+        "difficulty": "medium"
     },
     {
         "id": 19,
@@ -142,7 +142,7 @@
     {
         "id": 21,
         "question": "How did Jan Žižka fight if his army was just peasants?",
-        "response": "Jan Žižka transformed peasants into a feared force through tactical innovations, most notably the Wagenburg (war wagon)—a mobile fortress made of chained farm wagons that rendered knight cavalry charges obsolete. He also utilized combined arms tactics (mixing crossbowmen, early handgunners, and pikemen), strategically used elevated terrain and field artillery, and employed psychological warfare via war pipes and battle hymns.",
+        "response": "Jan Žižka transformed peasants into a feared force through tactical innovations, most notably the Wagenburg (war wagon) — a mobile fortress made of chained farm wagons that rendered knight cavalry charges obsolete. He also utilized combined arms tactics (mixing crossbowmen, early handgunners, and pikemen), strategically used elevated terrain and field artillery, and employed psychological warfare via war pipes and battle hymns.",
         "source": ["hussite_wars.md"],
         "difficulty": "medium"
     },
@@ -155,9 +155,9 @@
     },
     {
         "id": 23,
-        "question": "List all the meat-eating dinosaurs from South America.",
-        "response": "The South American theropods mentioned are Irritator challengeri (a spinosaurid from Brazil), Giganotosaurus carolinii (from Argentina), and Mapusaurus roseae (from Argentina).",
-        "source": ["dinosaurs.md"],
+        "question": "Is the game 'Subnautica 2' on both the 2025 and 2026 release lists? How do their descriptions differ?",
+        "response": "Yes, Subnautica 2 appears on both the 2025 and 2026 lists. The 2025 entry has a review score of 8.6 and emphasizes 'expanded biomes and collaborative crafting'. The 2026 entry highlights an 'overhauled building system and up-to-four-player co-op', suggesting continued expansion of the game across both years.",
+        "source": ["games_2025.csv", "games_2026.csv"],
         "difficulty": "medium"
     },
     {
@@ -176,9 +176,9 @@
     },
     {
         "id": 26,
-        "question": "List the games developed by Obsidian Entertainment and Playground Games.",
-        "response": "Obsidian Entertainment developed 'Avowed' and 'The Outer Worlds 2'. Playground Games developed the revival of 'Fable'.",
-        "source": ["games_2025.csv"],
+        "question": "List the games developed by Obsidian Entertainment and Playground Games across 2025 and 2026.",
+        "response": "Obsidian Entertainment developed 'Avowed' and 'The Outer Worlds 2' in 2025. Playground Games developed 'Fable', which appears on both the 2025 list (Action RPG, score 8.2, a revival of the Lionhead RPG series) and the 2026 list (described as a long-awaited reboot bringing players back to Albion).",
+        "source": ["games_2025.csv", "games_2026.csv"],
         "difficulty": "medium"
     },
     {
@@ -190,9 +190,9 @@
     },
     {
         "id": 28,
-        "question": "Did Pterosaurs evolve into birds?",
-        "response": "No, Pterosaurs did not evolve into birds. They are distinct from birds, which evolved much later from theropod dinosaurs. Pterosaurs were an entirely different clade of flying reptiles.",
-        "source": ["dinosaurs.md"],
+        "question": "Were there any fighting games in 2025 and 2026?",
+        "response": "Yes. In 2025, the fighting games were: 'Mortal Kombat 2 (2025)' (score 7.8), 'Tekken 8 Year 2' (score 8.5), and 'Street Fighter 6: Year 3' (score 8.6). In 2026, 'Invincible VS' is a brutal 3v3 tag-team fighting game featuring characters from the Amazon Prime animated series.",
+        "source": ["games_2025.csv", "games_2026.csv"],
         "difficulty": "medium"
     },
     {
@@ -204,9 +204,9 @@
     },
     {
         "id": 30,
-        "question": "Tell me about any games that feature co-op gameplay, and compare working as a team to how the Mapusaurus hunted.",
-        "response": "The 2025 list features several co-op games, including 'Split Fiction', 'Subnautica 2', 'Elden Ring Nightreign', 'Rusted Moss 2', 'Hyper Light Breaker', 'Granblue Fantasy Relink 2', and 'Little Nightmares III'. This concept of teaming up mirrors the behavior of the Mapusaurus; evidence suggests these massive carnivores hunted in temporary packs to combine their strength and take down colossal prey like the Argentinosaurus.",
-        "source": ["games_2025.csv", "dinosaurs.md"],
+        "question": "Are there any vampire-themed games in 2025 or 2026, and how do they compare to the Nazgûl from Tolkien's lore?",
+        "response": "In 2025, 'Legacy of Kain: Soul Reaver Reborn' is a gothic vampire action game by Crystal Dynamics (score 8.4). In 2026, 'Code Vein II' is a vampire-themed Soulslike RPG. In Tolkien's lore, the Nazgûl (Ringwraiths) are not traditional vampires but mortal kings of Men who were corrupted by the Nine Rings of Power — their lives stretched across centuries, hollowed out, until they became wraith-like servants of Sauron, stripped of free will.",
+        "source": ["games_2025.csv", "games_2026.csv", "lotr_lore.md"],
         "difficulty": "hard"
     }
 ]

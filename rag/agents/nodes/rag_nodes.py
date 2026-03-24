@@ -5,18 +5,36 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.types import Send
 from langgraph.graph import END
-
 from flashrank import Ranker, RerankRequest
 
 from rag.agents.state import AgentState, WorkerState
-from rag.agents.models import MultiQuery, GradeHallucinations, ExtractionScheme, CompletenessCheck
+from rag.agents.models import MultiQuery, GradeHallucinations, CompletenessCheck, QueryPlan, QueryStrategy, SQLQueryPlan
 from rag.agents.enums import NodeName, Intent
 from rag.agents.prompts import Prompts
 from database.base.BaseDbRepository import BaseDbRepository
+from database.DuckDbRepository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+class ModelParams():
+    def __init__(self, top_n: int, chars_per_doc: int, listing_chars: int, max_iterations: int):
+        self.top_n = top_n
+        self.chars_per_doc = chars_per_doc
+        self.listing_chars = listing_chars
+        self.max_iterations = max_iterations
+
+    @staticmethod
+    def create_from_context_window(context_window: int) -> 'ModelParams':
+        if context_window <= 4096:
+            return ModelParams(5, 1200, 200, 2)
+        elif context_window <= 8192:
+            return ModelParams(10, 2000, 500, 3)
+        elif context_window <= 32768:
+            return ModelParams(15, 3000, 800, 3)
+        else:
+            return ModelParams(20, 5000, 1500, 4)
 
 class RagNodes:
     def __init__(
@@ -25,46 +43,30 @@ class RagNodes:
         db_repository: BaseDbRepository,
         embedding_service: TextEmbeddingService,
         context_window: int = 8192,
+        duck_db_repo: DuckDbRepository | None = None,
+        available_sources: List[str] | None = None,
     ):
         self.llm = llm
         self.db_repository = db_repository
         self.embedding_service = embedding_service
         self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2')
+        self.duck_db_repo = duck_db_repo
+        self.available_sources = available_sources or []
+        self._compact_catalog = duck_db_repo.get_compact_catalog() if duck_db_repo else ""
 
-        params = self._compute_model_params(context_window)
-        self.distiller_top_n = params['top_n']
-        self.distiller_chars_per_doc = params['chars_per_doc']
-        self.listing_chars_per_doc = params['listing_chars']
-        self.max_completeness_iterations = params['max_iterations']
+        params = ModelParams.create_from_context_window(context_window)
+        self.distiller_top_n = params.top_n
+        self.distiller_chars_per_doc = params.chars_per_doc
+        self.listing_chars_per_doc = params.listing_chars
+        self.max_completeness_iterations = params.max_iterations
 
-    @staticmethod
-    def _compute_model_params(context_window: int) -> dict:
-        if context_window <= 4096:
-            return {'top_n': 5, 'chars_per_doc': 1200, 'listing_chars': 200, 'max_iterations': 2}
-        elif context_window <= 8192:
-            return {'top_n': 10, 'chars_per_doc': 2000, 'listing_chars': 500, 'max_iterations': 3}
-        elif context_window <= 32768:
-            return {'top_n': 15, 'chars_per_doc': 3000, 'listing_chars': 800, 'max_iterations': 3}
-        else:
-            return {'top_n': 20, 'chars_per_doc': 5000, 'listing_chars': 1500, 'max_iterations': 4}
-
-    def _validate_metadata_field(self, value: str, field_name: str) -> str | None:
-        if not value:
-            return None
-        if field_name == 'locations' and value.lower() == 'global':
-            return None
-        validated = self.db_repository.validate_filter(value.lower(), field_name)
-        if not validated:
-            logger.warning(f"{field_name.title()} '{value}' not found in database")
-        return validated
-
-    def query_decomposer_agent(self, state: AgentState):
-        logger.info("--- QUERY DECOMPOSER ---")
-
+    def query_planner_agent(self, state: AgentState):
+        logger.info("--- QUERY PLANNER ---")
         messages = state['messages']
         original_query = messages[-1].content
+        detected_source = state.get('detected_source')
+        intent = state.get('intent', Intent.RAG)
 
-        # Include recent conversation history so follow-up questions resolve correctly
         history = messages[-4:-1]
         if history:
             context_lines = [f"{m.type.upper()}: {m.content[:300]}" for m in history]
@@ -72,35 +74,82 @@ class RagNodes:
         else:
             user_input = f"Current question: {original_query}"
 
+        if not self.duck_db_repo or not self._compact_catalog:
+            return self._decompose_vector_queries(user_input, original_query, detected_source, intent)
+
+        try:
+            planner = self.llm.with_structured_output(QueryPlan)
+            plan = cast(QueryPlan, planner.invoke([
+                SystemMessage(content=Prompts.get_query_planner_prompt(
+                    self._compact_catalog,
+                    self.available_sources,
+                )),
+                HumanMessage(content=user_input),
+            ]))
+
+            if intent in (Intent.RAG_SUMMARIZATION, Intent.RAG_EXHAUSTIVE) and detected_source and plan.strategy == QueryStrategy.VECTOR:
+                plan = QueryPlan(strategy=QueryStrategy.SCROLL)
+
+            if plan.strategy in (QueryStrategy.SQL, QueryStrategy.HYBRID) and plan.sql_sources:
+                known_tables = self.duck_db_repo.list_tables()
+                valid_sources = [t for t in plan.sql_sources if t in known_tables]
+                unknown = [t for t in plan.sql_sources if t not in known_tables]
+                if unknown:
+                    logger.warning(f"QueryPlanner chose unknown table(s) {unknown} (known: {known_tables}), removing them")
+                if not valid_sources:
+                    logger.warning("No valid sql_sources remain, falling back to vector")
+                    plan = QueryPlan(strategy=QueryStrategy.VECTOR, vector_queries=plan.vector_queries)
+                elif valid_sources != plan.sql_sources:
+                    plan = QueryPlan(strategy=plan.strategy, sql_sources=valid_sources, sql_hint=plan.sql_hint, vector_queries=plan.vector_queries)
+
+            logger.info(f"QueryPlan: strategy={plan.strategy}, sql_sources={plan.sql_sources}, queries={plan.vector_queries}")
+            return {
+                "query_plan": plan,
+                "rewritten_queries": plan.vector_queries or [original_query],
+            }
+
+        except Exception as e:
+            logger.warning(f"QueryPlanner LLM call failed ({e}), falling back to vector decomposition")
+            return self._decompose_vector_queries(user_input, original_query, detected_source, intent)
+
+    def _decompose_vector_queries(
+        self,
+        user_input: str,
+        original_query: str,
+        detected_source: str | None,
+        intent: Intent,
+    ) -> dict:
+        """Fallback: generate vector search queries (old query_decomposer_agent logic)."""
         try:
             rewriter = self.llm.with_structured_output(MultiQuery)
             result = cast(MultiQuery, rewriter.invoke([
                 SystemMessage(content=Prompts.get_query_decomposer_agent_prompt()),
-                HumanMessage(content=user_input)
+                HumanMessage(content=user_input),
             ]))
-            rephrasings = [q.strip() for q in result.queries if q.strip()]
+            rephrasings = [q.strip() for q in result.queries if q.strip()][:4]
         except Exception as e:
-            logger.warning(f"Multi-query generation failed ({e}), falling back to original query only.")
+            logger.warning(f"Multi-query generation failed ({e}), using original query only")
             rephrasings = []
 
-        # Always keep the original as first query for maximum recall
-        all_queries = [original_query] + rephrasings
-
-        # Deduplicate while preserving order
+        # delete duplicates
         seen: set = set()
-        unique_queries = []
-        for q in all_queries:
+        unique_queries: List[str] = []
+        for q in [original_query] + rephrasings:
             if q.lower() not in seen:
                 seen.add(q.lower())
                 unique_queries.append(q)
 
-        logger.info(f"Queries ({len(unique_queries)}): {unique_queries}")
-        return {"rewritten_queries": unique_queries}
+        strategy = (
+            QueryStrategy.SCROLL
+            if intent in (Intent.RAG_SUMMARIZATION, Intent.RAG_EXHAUSTIVE) and detected_source
+            else QueryStrategy.VECTOR
+        )
+        plan = QueryPlan(strategy=strategy, vector_queries=unique_queries)
+        logger.info(f"Fallback QueryPlan: strategy={plan.strategy}, queries={unique_queries}")
+        return {"query_plan": plan, "rewritten_queries": unique_queries}
 
     def research_worker(self, state: WorkerState):
-        target = state.get('target')
         search_text = state.get('query')
-        # query_type = state.get('query_type', 'factual')
         logger.info(f"--- WORKER SEARCHING: {search_text} ---")
 
         try:
@@ -131,25 +180,97 @@ class RagNodes:
             if not fresh_docs:
                 logger.info("No new docs after filtering already seen docs")
                 return {'search_results': []}
-            
+
             return {'search_results': fresh_docs}
 
         return {'search_results': []}
+
+    def scroll_retriever(self, state: AgentState):
+        """Fetch ALL chunks from a specific source, rerank by relevance, return top-N to fact extractor."""
+        source = state.get('detected_source')
+        if not source:
+            logger.warning("scroll_retriever called without detected_source — returning empty")
+            return {'filtered_results': [], 'search_results': []}
+
+        docs = self.db_repository.scroll_all_by_source(source, limit=500)
+        logger.info(f"scroll_retriever fetched {len(docs)} docs from source '{source}'")
+
+        if not docs:
+            return {'filtered_results': [], 'search_results': []}
+
+        query = state['messages'][-1].content
+        passages = [{"id": i, "text": doc.text, "meta": doc.metadata} for i, doc in enumerate(docs)]
+        reranked = self.reranker.rerank(RerankRequest(query=query, passages=passages))
+        sorted_docs = [docs[r['id']] for r in sorted(reranked, key=lambda x: x['score'], reverse=True)]
+
+        return {'filtered_results': sorted_docs, 'search_results': docs}
+
+    def analytical_query_agent(self, state: AgentState):
+        """Execute a SQL query on DuckDB and store the result as a distilled fact."""
+        logger.info("--- ANALYTICAL QUERY (DuckDB) ---")
+        plan = state.get('query_plan')
+        original_question = state['messages'][-1].content
+
+        if not plan or not plan.sql_sources or not self.duck_db_repo:
+            logger.error("analytical_query_agent called without sql_sources or duck_db_repo — returning empty")
+            return {"distilled_facts": [], "sql_result": None}
+
+        sources_label = ", ".join(plan.sql_sources)
+        combined_schema = "\n\n---\n\n".join(
+            self.duck_db_repo.get_schema(t) for t in plan.sql_sources
+        )
+        hint = plan.sql_hint or original_question
+
+        try:
+            generator = self.llm.with_structured_output(SQLQueryPlan)
+            sql_plan = cast(SQLQueryPlan, generator.invoke([
+                SystemMessage(content=Prompts.get_sql_generator_prompt(combined_schema)),
+                HumanMessage(content=f"Question: {original_question}\nHint: {hint}"),
+            ]))
+            logger.info(f"Generated SQL: {sql_plan.sql}")
+
+            df = self.duck_db_repo.run_select(sql_plan.sql)
+            if df.empty:
+                logger.info("SQL returned no rows")
+                return {
+                    "distilled_facts": [f"[{sources_label}] SQL query returned no results."],
+                    "sql_result": "",
+                }
+
+            result_text = df.to_string(index=False)
+            fact = f"[{sources_label}] {sql_plan.explanation}\n{result_text}"
+            logger.info(f"SQL result ({len(df)} rows):\n{result_text[:400]}")
+            return {"distilled_facts": [fact], "sql_result": result_text}
+
+        except Exception as e:
+            logger.error(f"analytical_query_agent failed: {e}")
+            return {
+                "distilled_facts": [f"[{sources_label}] SQL query could not be executed: {e}"],
+                "sql_result": None,
+            }
 
     def retrieval_grader_agent(self, state: AgentState):
         logger.info("--- GRADING & RE-RANKING DOCS ---")
         original_question = state['messages'][-1].content
         raw_documents = state.get('search_results', [])
+        intent = state.get('intent', Intent.RAG)
 
         if not raw_documents:
             return {'filtered_results': []}
 
+        existing_filtered = state.get('filtered_results', [])
+        existing_ids = {doc.id for doc in existing_filtered if hasattr(doc, 'id')}
+
         unique_docs = []
         seen_ids = set()
         for doc in raw_documents:
-            if doc.id not in seen_ids:
+            if doc.id not in seen_ids and doc.id not in existing_ids:
                 seen_ids.add(doc.id)
                 unique_docs.append(doc)
+
+        if not unique_docs:
+            logger.info("No new unique docs to rerank after excluding already-filtered docs")
+            return {'filtered_results': []}
 
         passages = [
             {"id": i, "text": doc.text, "meta": doc.metadata}
@@ -162,11 +283,16 @@ class RagNodes:
         sorted_docs = [
             unique_docs[result['id']]
             for result in sorted(reranked_results, key=lambda x: x['score'], reverse=True)
-        ]
+        ] 
 
-        top_docs = sorted_docs[:self.distiller_top_n]
+        if intent == Intent.RAG_EXHAUSTIVE:
+            effective_top_n = self.distiller_top_n * 3
+        else:
+            effective_top_n = self.distiller_top_n
 
-        logger.info(f"Kept top {len(top_docs)} documents after reranking (cutoff={self.distiller_top_n})")
+        top_docs = sorted_docs[:effective_top_n]
+
+        logger.info(f"Kept top {len(top_docs)} NEW documents after reranking (cutoff={effective_top_n}, intent={intent})")
         return {'filtered_results': top_docs}
 
     def fact_extractor_agent(self, state: AgentState):
@@ -186,27 +312,36 @@ class RagNodes:
             truncated = doc.text[:self.distiller_chars_per_doc]
             doc_blocks.append(f"[{source}]\n{truncated}")
 
-        combined_docs = "\n---\n".join(doc_blocks)
-        human_prompt = f"Question: {query}\n\nDocuments:\n{combined_docs}"
+        batch_size = self.distiller_top_n
+        batches = [doc_blocks[i:i + batch_size] for i in range(0, len(doc_blocks), batch_size)]
+        logger.info(f"Fact extractor: {len(docs)} docs → {len(batches)} batch(es) of {batch_size}")
 
-        try:
-            response = self.llm.invoke([
-                SystemMessage(content=Prompts.get_fact_extractor_prompt()),
-                HumanMessage(content=human_prompt)
-            ])
-            extracted = response.content.strip()
+        all_extracted = []
+        for batch_idx, batch in enumerate(batches):
+            logger.info(f"Processing batch_idx: {batch_idx}...")
+            combined_docs = "\n---\n".join(batch)
+            human_prompt = f"Question: {query}\n\nDocuments:\n{combined_docs}"
+            try:
+                response = self.llm.invoke([
+                    SystemMessage(content=Prompts.get_fact_extractor_prompt()),
+                    HumanMessage(content=human_prompt)
+                ])
+                extracted = response.content.strip()
+                cleaned = re.sub(r'NO RELEVANT FACTS FOUND\.?', '', extracted, flags=re.IGNORECASE).strip()
+                if cleaned and len(cleaned) >= 15:
+                    all_extracted.append(cleaned)
+                    logger.info(f"- Facts extracted")
+                else:
+                    logger.info(f"- No facts found")
+            except Exception as e:
+                logger.warning(f"Fact extractor failed on batch {batch_idx} ({e}), skipping.")
 
-            cleaned = re.sub(r'NO RELEVANT FACTS FOUND\.?', '', extracted, flags=re.IGNORECASE).strip()
-            if not cleaned or len(cleaned) < 15:
-                logger.info("Fact extractor returned empty list — skipping (no new relevant facts).")
-                return {'distilled_facts': []}
-            extracted = cleaned
-        except Exception as e:
-            logger.warning(f"Fact extractor failed ({e}), skipping.")
+        if not all_extracted:
+            logger.info("Fact extractor returned empty list — skipping (no new relevant facts).")
             return {'distilled_facts': []}
 
         sources_tag = f"[Sources: {', '.join(sources_seen)}]"
-        attributed = f"{sources_tag}\n{extracted}"
+        attributed = f"{sources_tag}\n" + "\n".join(all_extracted)
 
         logger.info(f"Distilled facts block ({len(attributed)} chars)")
         return {'distilled_facts': [attributed]}
@@ -235,7 +370,7 @@ class RagNodes:
 
             follow_up = result.follow_up_query.strip() if not result.is_complete else ''
 
-            # Semantic duplicate guard — catches near-identical queries that differ in wording
+            # semantic duplicate guard
             if follow_up and prev_query:
                 similarity = SequenceMatcher(None, follow_up.lower(), prev_query.lower()).ratio()
                 if similarity > 0.6:
@@ -254,16 +389,29 @@ class RagNodes:
     def route_completeness_check(self, state: AgentState):
         iterations = state.get('retrieval_iterations', 0)
         follow_up = state.get('completeness_follow_up_query', '')
-        # query_type = state.get('query_type', 'factual')
+        intent = state.get('intent', Intent.RAG)
+        detected_source = state.get('detected_source')
+        plan = state.get('query_plan')
+
+        if plan and plan.strategy == QueryStrategy.SQL:
+            logger.info("Completeness → HALLUCINATION_GRADER (SQL query, gap-fill not applicable)")
+            return NodeName.HALLUCINATION_GRADER_AGENT
+
+        if plan and plan.strategy == QueryStrategy.SCROLL:
+            logger.info(f"Completeness → HALLUCINATION_GRADER (SCROLL already retrieved all docs from source '{detected_source}', gap-fill not applicable)")
+            return NodeName.HALLUCINATION_GRADER_AGENT
+
+        if detected_source and intent == Intent.RAG_SUMMARIZATION:
+            logger.info(f"Completeness → HALLUCINATION_GRADER (summarization scroll-based query, skipping gap-check)")
+            return NodeName.HALLUCINATION_GRADER_AGENT
 
         if not follow_up or iterations >= self.max_completeness_iterations:
             logger.info(f"Completeness → HALLUCINATION_GRADER (iterations={iterations}, follow_up='{follow_up}')")
             return NodeName.HALLUCINATION_GRADER_AGENT
 
         logger.info(f"Completeness → RESEARCH_WORKER with query: '{follow_up}' (iteration {iterations})")
-        dummy_target = ExtractionScheme()
         seen_ids = [doc.id for doc in state.get('search_results', []) if hasattr(doc, 'id')]
-        return [Send(NodeName.RESEARCH_WORKER, {'target': dummy_target, 'query': follow_up, 'seen_doc_ids': seen_ids})]
+        return [Send(NodeName.RESEARCH_WORKER, {'query': follow_up, 'seen_doc_ids': seen_ids})]
 
     def synthesizer_agent(self, state: AgentState):
         logger.info("--- SYNTHESIZING FINAL ANSWER ---")
@@ -271,8 +419,18 @@ class RagNodes:
         distilled_facts = state.get('distilled_facts', [])
 
         if not distilled_facts:
-            return {'messages': [AIMessage(content='I could not find specific information in the database to answer your question.')]}
-        facts_block = "\n\n".join(distilled_facts)
+            filtered_results = state.get('filtered_results', [])
+            if not filtered_results:
+                return {'messages': [AIMessage(content='I could not find specific information in the database to answer your question.')]}
+            logger.info("distilled_facts empty — falling back to raw filtered_results for synthesis")
+            raw_blocks = []
+            for doc in filtered_results[:10]:
+                source = doc.metadata.get('source', 'unknown')
+                raw_blocks.append(f"[{source}]\n{doc.text[:self.listing_chars_per_doc]}")
+            facts_block = "\n---\n".join(raw_blocks)
+        else:
+            facts_block = "\n\n".join(distilled_facts)
+
         human_prompt = f'User Question: "{user_query}"\n\nFacts:\n{facts_block}'
 
         is_retry = state.get("hallucination_status") == "hallucinated"
@@ -296,7 +454,6 @@ class RagNodes:
         if distilled_facts:
             context = "\n\n".join(distilled_facts)
         else:
-            # Listing fallback: use raw filtered results
             context = "\n".join(
                 doc.text[:self.listing_chars_per_doc]
                 for doc in filtered_results[:10]
@@ -320,28 +477,46 @@ class RagNodes:
                 'hallucination_retries': current_retries + 1
             }
 
-    def error_agent(self, state: AgentState):  # noqa: ARG002
+    def error_agent(self, _state: AgentState):
         logger.info("--- ERROR ---")
         return {'messages': [AIMessage(content='I could not process your request. Please try to be more specific with your question.')]}
 
     @staticmethod
-    def validate_and_map(state: AgentState) -> Literal[NodeName.RESEARCH_WORKER, NodeName.ERROR]:
-        data = state.get('extracted_data', [])
+    def route_query_plan(state: AgentState):
+        """Route from QUERY_PLANNER based on the QueryPlan strategy."""
+        plan = state.get('query_plan')
         queries = state.get('rewritten_queries') or [state['messages'][-1].content]
-        # query_type = state.get('query_type', 'factual')
 
-        if not data:
-            dummy_target = ExtractionScheme()
-            return [
-                Send(NodeName.RESEARCH_WORKER, {'target': dummy_target, 'query': q}) #, 'query_type': query_type})
-                for q in queries
-            ]
+        if not plan:
+            return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
 
-        return [
-            Send(NodeName.RESEARCH_WORKER, {'target': t, 'query': q}) #, 'query_type': query_type})
-            for t in data
-            for q in queries
-        ]
+        if plan.strategy == QueryStrategy.SQL:
+            logger.info("route_query_plan → ANALYTICAL_QUERY (sql)")
+            return NodeName.ANALYTICAL_QUERY
+
+        if plan.strategy == QueryStrategy.HYBRID:
+            logger.info("route_query_plan → ANALYTICAL_QUERY (hybrid, will continue to vector after)")
+            return NodeName.ANALYTICAL_QUERY
+
+        if plan.strategy == QueryStrategy.SCROLL:
+            logger.info("route_query_plan → SCROLL_RETRIEVER")
+            return NodeName.SCROLL_RETRIEVER
+
+        logger.info(f"route_query_plan → RESEARCH_WORKER fan-out ({len(queries)} queries)")
+        return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
+
+    @staticmethod
+    def route_after_analytical(state: AgentState):
+        """After ANALYTICAL_QUERY: hybrid continues to vector search, sql goes straight to synthesizer."""
+        plan = state.get('query_plan')
+        queries = state.get('rewritten_queries') or [state['messages'][-1].content]
+
+        if plan and plan.strategy == QueryStrategy.HYBRID:
+            logger.info("route_after_analytical → RESEARCH_WORKER fan-out (hybrid)")
+            return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
+
+        logger.info("route_after_analytical → SYNTHESIZER (sql)")
+        return NodeName.SYNTHESIZER
 
     @staticmethod
     def route_hallucination(state: AgentState) -> Literal[NodeName.SYNTHESIZER, END]: # type: ignore
@@ -351,12 +526,12 @@ class RagNodes:
 
         if status == 'hallucinated':
             if retries >= MAX_RETRIES:
-                logger.warning(f"Max retries ({MAX_RETRIES}) reached. Returning error message.")
+                logger.warning(f"Max retries ({MAX_RETRIES}) reached. Returning last draft with caveat.")
+                last_draft = state['messages'][-1].content
                 state['messages'][-1] = AIMessage(
-                    content="I couldn't generate a reliable answer from the available data. The information in the database may not fully address your question. Please try rephrasing or asking about a different aspect."
+                    content=f"Based on available context (note: information may be incomplete):\n\n{last_draft}"
                 )
                 return END
 
             return NodeName.SYNTHESIZER
         return END
-

@@ -10,11 +10,10 @@ from datetime import datetime
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
 
-from database.base.MyDocument import MyDocument
 from text_embedding import TextEmbeddingService
 from database.QdrantDbRepository import QdrantDbRepository
+from database.DuckDbRepository import DuckDbRepository
 from rag.AgenticRAG import AgenticRAG
-import constants
 
 def get_results_filepath(model_name: str, questions_file: str = '') -> str:
     current_timestamp = datetime.now().strftime("%y%m%d")
@@ -54,10 +53,11 @@ def save_answers(results: List[Dict[str, any]], model_name: str, duration: float
 def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1:8b', collection_name: str = '') -> List[Dict[str, any]]:
     embedding_service = TextEmbeddingService()
 
-    valid_collection_name = constants.COLLECTION_NAME_DROUGH
+    valid_collection_name = 'drough'
     if collection_name != '':
         valid_collection_name = collection_name
 
+    duck_db = DuckDbRepository()
     db_repository = QdrantDbRepository(
         ip='localhost', 
         port=6333,
@@ -72,45 +72,34 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
         print(f"Failed to connect to ChromaDB for RAG: {connect_result.message}")
         return
 
-    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name)
+    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name, duck_db_repo=duck_db)
 
     results = []
     for q in tqdm(questions, desc='Generating RAG Answers'):
         question = q['question']
 
-        try:
-            response = rag.chat(question)
-            generated_text = response['response']
-            original_query = response['original_query']
-            rewritten_queries = response['rewritten_queries']
+        response = rag.chat(question)
+        generated_text = response['response']
+        original_query = response['original_query']
+        distilled_facts = response['distilled_facts']
 
-            distilled_facts = response.get('distilled_facts', [])
+        agent_state = response.get('agent_state', {})
+        intent = agent_state['intent']
+        detected_source = agent_state['detected_source']
+        rewritten_queries = agent_state['rewritten_queries']
+        query_plan = str(agent_state['query_plan'])
+        sql_result = agent_state['sql_result']
+        hallucination_status = agent_state['hallucination_status']
+        retrieval_iterations = agent_state['retrieval_iterations']
+        completeness_follow_up_query = agent_state['completeness_follow_up_query']
 
-            agent_state = response.get('agent_state', {})
-            completeness_follow_up_query = agent_state.get('completeness_follow_up_query', '')
-            retrieval_iterations = agent_state.get('retrieval_iterations', 0)
-
-            extracted_data = []
-            for e in response['extracted_data']:
-                extracted_data.append({
-                    'year': e.year,
-                    'location': e.location,
-                    'entity': e.entities
-                })
-
-            sources = response['sources']
-            retrieved_docs = []
-            for source in sources:
-                retrieved_docs.append({
-                    'source': source.metadata['source'],
-                    'text': source.text
-                })
-        except Exception as e:
-            print(f"ERROR: {str(e)}")
-            generated_text = f"ERROR: {str(e)}"
-            retrieved_docs = []
-            completeness_follow_up_query = ''
-            retrieval_iterations = 0
+        sources = response['sources']
+        retrieved_docs = []
+        for source in sources:
+            retrieved_docs.append({
+                'source': source.metadata['source'],
+                'text': source.text
+            })
 
         results.append({
             'id': q['id'],
@@ -119,11 +108,15 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
             'generated_answer': generated_text,
             'retrieved_sources': retrieved_docs,
             'distilled_facts': distilled_facts,
-            'extracted_data': extracted_data,
             'original_query': original_query,
             'rewritten_queries': rewritten_queries,
-            'completeness_follow_up_query': completeness_follow_up_query,
-            'retrieval_iterations': retrieval_iterations
+            'intent': intent,
+            'detected_source': detected_source,
+            'query_plan': query_plan,
+            'sql_result': sql_result,
+            'hallucination_status': hallucination_status,
+            'retrieval_iterations': retrieval_iterations,
+            'completeness_follow_up_query': completeness_follow_up_query
         })
 
     return results
