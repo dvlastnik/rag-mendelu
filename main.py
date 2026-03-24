@@ -7,6 +7,7 @@ from pathlib import Path
 
 from database.QdrantDbRepository import QdrantDbRepository
 from database.base.BaseDbRepository import BaseDbRepository
+from database.DuckDbRepository import DuckDbRepository
 from etl.GeneralEtl import GeneralEtl
 from text_embedding import TextEmbeddingService
 from rag.AgenticRAG import AgenticRAG
@@ -26,6 +27,7 @@ def run_etl_general(
         db_repository: BaseDbRepository,
         collection_name: str,
         use_recursive_chunking: bool,
+        duck_db=None,
     ):
     """Runs the general ETL pipeline on any supported file type."""
     highlight_log(logger, "Starting General ETL pipeline...")
@@ -46,6 +48,10 @@ def run_etl_general(
     else:
         files = [str(path_obj)]
 
+    if delete_collection and duck_db is not None:
+        for file in files:
+            duck_db.drop_table(Path(file).stem)
+
     if collection_name:
         db_repository.collection_name = collection_name
     db_repository.connect_and_create_collection(delete_collection)
@@ -60,6 +66,7 @@ def run_etl_general(
             db_repositories={'qdrant': db_repository},
             embedding_service=embedding_service,
             use_semantic=use_semantic,
+            duck_db_repo=duck_db,
         )
         status = obj.run()
 
@@ -84,7 +91,7 @@ def check_databases(db_repository: BaseDbRepository):
     db_repository.logger.info(f'Metadata from database: {db_repository.valid_metadata}')
     db_repository.close()
 
-def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, model_name: str):
+def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, model_name: str, duck_db: DuckDbRepository | None = None):
     """
     Starts the RAG chat mode.
     """
@@ -95,7 +102,7 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
         logger.error(f"Failed to connect to ChromaDB for RAG: {connect_result.message}")
         return
 
-    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name)
+    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name, duck_db_repo=duck_db)
 
     print("Assitant ready. Type 'exit' or press Ctrl+C to end program.")
     while True:
@@ -214,6 +221,8 @@ def main():
         }
     )
 
+    duck_db = DuckDbRepository()
+
     if args.run_etl:
         run_etl_general(
             path=args.path,
@@ -222,17 +231,19 @@ def main():
             db_repository=db_repository,
             collection_name=collection_name,
             use_recursive_chunking=args.recursive_chunking,
+            duck_db=duck_db,
         )
         
     elif args.check_dbs:
         check_databases(db_repository)
     elif args.chat:
-        run_rag_chat(embedding_service, db_repository, args.model)
+        run_rag_chat(embedding_service, db_repository, args.model, duck_db=duck_db)
     else:
         logger.info("No ETL or DB check specified. Running RAG chat mode by default.")
-        run_rag_chat(embedding_service, db_repository, args.model)
+        run_rag_chat(embedding_service, db_repository, args.model, duck_db=duck_db)
 
     # Close dbs
+    duck_db.close()
     db_repository.close()
     
     end_time = time.time()

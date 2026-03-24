@@ -1,23 +1,38 @@
 class Prompts:
     @staticmethod
-    def get_router_agent_prompt() -> str:
-        return """You are a strict Classification Bot.
-        You must choose between two options: 'rag' or 'general'.
+    def get_router_agent_prompt(available_sources: list[str] | None = None) -> str:
+        sources_block = ""
+        if available_sources:
+            sources_list = ", ".join(available_sources)
+            sources_block = f"""
+        AVAILABLE SOURCES in the database: [{sources_list}]
+        If the user mentions a source by name (or a close variant), set detected_source to the matching source name from the list above."""
+
+        return f"""You are a strict Classification Bot.
+        You must classify the user query into one of four types: 'rag', 'exhaustive', 'summarization', or 'general'.
 
         DEFINITIONS:
         1. 'general': ONLY for greetings (Hi, Hello), goodbyes (Bye), or polite phrases (Thanks, Cool).
-        2. 'rag': For EVERYTHING else. Any question, any statement of fact, any request for comparison, any mention of weather/floods/countries.
+        2. 'rag': Specific factual questions — single-answer lookups, comparisons, "what year did X happen?".
+        3. 'exhaustive': Listing or enumeration queries — "list all X", "every X mentioned", "all X in the database", "which X are there", "how many X". The user wants a comprehensive list, not a single answer.
+        4. 'summarization': Summarize or overview requests — "summarize document X", "give me an overview of X", "what is document X about".
 
         CRITICAL RULES:
-        - If the user asks a question -> MUST be 'rag'.
+        - If the user asks a question -> NEVER 'general'.
         - If the user refers to previous messages ("and Italy?") -> MUST be 'rag'.
-        - "Compare floods" is NOT general conversation. It is a data request.
-
+        - "Compare floods" is NOT general. It is 'rag'.
+        - "List all bands" is NOT 'rag'. It is 'exhaustive'.
+        - "Summarize the drought report" is 'summarization'.
+        - When in doubt between 'rag' and 'exhaustive', prefer 'exhaustive' if the user wants multiple items.
+        {sources_block}
         EXAMPLES:
         Input: "Hi there" -> general
         Input: "Compare floods in Italy" -> rag
-        Input: "And Czech Republic?" -> rag
-        Input: "What about 2022?" -> rag
+        Input: "What year did Metallica form?" -> rag
+        Input: "List all music bands mentioned" -> exhaustive
+        Input: "What games are in the database?" -> exhaustive
+        Input: "Summarize the drought report" -> summarization
+        Input: "Give me an overview of history_of_metal" -> summarization
         Input: "Thanks" -> general
         """
 
@@ -38,6 +53,14 @@ class Prompts:
         4. Each sub-query must be independently searchable — no references to other sub-queries.
         5. Sub-queries should be keyword-dense: proper nouns, dates, technical terms, no question words.
         6. Do NOT duplicate — each query must target different information.
+
+        CONSTRAINTS:
+        - Do NOT introduce platform names, review sites, or award bodies
+          (Metacritic, Steam, IGN, Game Awards, GOTY, Rotten Tomatoes, Epic Games Store)
+          that may not exist in the source documents.
+        - For structured data sources (CSV/table data), use field names as they likely
+          appear in the data (e.g., "review score" not "Metacritic score").
+        - Preserve the user's vocabulary as the primary query; rewrites are supplemental.
 
         EXAMPLES:
 
@@ -64,7 +87,7 @@ class Prompts:
 
     @staticmethod
     def get_fact_extractor_prompt() -> str:
-        return """You are a fact extractor. Read the documents and extract concise factual statements that help answer the question.
+        return f"""You are a fact extractor. Read the documents and extract concise factual statements that help answer the question.
 
         RULES:
         1. Extract one fact per line — each fact must be a short, standalone statement.
@@ -121,6 +144,12 @@ class Prompts:
         - Output "I cannot find the specific information in the database to answer your question." ONLY if you have NO facts at all.
         - Never refuse when you have partial facts — always synthesize what you have and cite your sources.
 
+        **MULTI-PART QUESTIONS:**
+        When the question contains multiple sub-questions (joined by "and", listed with commas, etc.):
+        - Answer each sub-question independently in sequence.
+        - If one sub-question cannot be answered from the facts, state "No information found for [sub-question]" and continue to the next.
+        - Never refuse all parts because one part is unanswerable.
+
         **EXAMPLE:**
         Facts:
         [Sources: climate_report, glacier_study]
@@ -149,6 +178,88 @@ class Prompts:
         - GOOD: "glacier retreat causes Alps temperature"
         - BAD: "What is missing?", "Find more info", "Which band is not mentioned?"
         """
+
+    @staticmethod
+    def get_query_planner_prompt(
+        compact_catalog: str,
+        available_sources: list[str],
+    ) -> str:
+        catalog_block = ""
+        if compact_catalog:
+            catalog_block = f"""
+SQL-QUERYABLE TABLES (DuckDB):
+{compact_catalog}
+
+Use strategy 'sql' when the question requires aggregation or filtering on these tables:
+  keywords: highest, lowest, maximum, minimum, max, min, rank, top N, bottom N,
+            average, count, how many, filter by, where, greater than, less than,
+            sort by, order by, all rows where, list all X with condition.
+Use strategy 'hybrid' when the question needs both SQL filtering AND semantic/narrative context.
+"""
+
+        scroll_block = ""
+        if available_sources:
+            scroll_block = f"""
+VECTOR-SEARCHABLE SOURCES: {', '.join(available_sources)}
+Use strategy 'scroll' ONLY for 'summarize X' / 'overview of X' when user explicitly names a specific source.
+"""
+
+        return f"""You are a Query Planner for a hybrid RAG + SQL system.
+
+TASK: Decide the best retrieval strategy for the question and generate the necessary queries.
+
+STRATEGIES:
+- 'vector': Semantic similarity search. Use for factual, conceptual, or narrative questions.
+- 'sql': Analytical SQL query on tabular data. Use for aggregation, ranking, or filtering questions.
+- 'hybrid': Both SQL + vector. Use when SQL finds candidates and semantic search adds explanatory context.
+- 'scroll': Fetch entire named document. Use only for summarize/overview requests on a specific named source.
+{catalog_block}{scroll_block}
+OUTPUT RULES:
+- For 'vector' and 'hybrid': fill vector_queries with 2–5 keyword-dense sub-queries (no question words, no "what", "how", "why").
+- For 'sql' and 'hybrid': set sql_sources to the list of exact table names to query (1 or more) and sql_hint to a plain-language description of the computation needed. Use multiple sql_sources when the question spans multiple tables (e.g. different years/datasets with the same schema).
+- For 'scroll': leave vector_queries empty; sql_sources = []; sql_hint = null.
+- For 'vector': sql_sources = []; sql_hint = null.
+
+EXAMPLES:
+Q: "What is the highest rated game?" → sql, sql_sources=["games_2025"], sql_hint="row with maximum review score"
+Q: "Which games have a review above 9?" → sql, sql_sources=["games_2025"], sql_hint="rows where review > 9 ordered by review descending"
+Q: "How many co-op games are there?" → sql, sql_sources=["games_2025"], sql_hint="count of rows where category is co-op"
+Q: "Were there any fighting games in 2025 and 2026?" → sql, sql_sources=["games_2025","games_2026"], sql_hint="rows where category is fighting"
+Q: "Tell me about the history of Metallica" → vector, vector_queries=["Metallica history formation", "Metallica biography origins thrash metal"]
+Q: "What co-op games score above 8 and what makes them special?" → hybrid, sql_sources=["games_2025"], sql_hint="co-op games with review > 8", vector_queries=["cooperative gameplay design elements", "co-op game mechanics features"]
+Q: "Summarize the history_of_metal document" → scroll
+Q: "What year did the first flood in the dataset occur?" → vector, vector_queries=["first flood year date earliest", "flood chronology timeline earliest event"]
+"""
+
+    @staticmethod
+    def get_sql_generator_prompt(schema: str) -> str:
+        return f"""You are a SQL expert. Generate a single SELECT statement to answer the user's question.
+
+TABLE SCHEMA:
+{schema}
+
+RULES:
+1. Output ONLY a valid SELECT statement — no INSERT, UPDATE, DELETE, DROP, CREATE, ALTER.
+2. Use column names exactly as shown in the schema.
+3. For "the highest / the lowest / the best / the worst" (single extremum that may have ties):
+   use a subquery — WHERE field = (SELECT MAX(field) FROM table) — this returns ALL tied rows.
+   Never use LIMIT 1 for single-extremum queries; ties must be included.
+4. For "top N / bottom N" where N > 1: use ORDER BY field DESC/ASC LIMIT N.
+5. For aggregation: use GROUP BY when grouping is needed; COUNT(*) for row counts.
+6. Select the most informative columns — avoid SELECT * when specific columns suffice.
+7. Keep the query simple and direct — use subqueries only when needed for tie-safety (rule 3).
+8. String comparisons: use ILIKE for case-insensitive matching (DuckDB supports ILIKE).
+9. When the schema contains multiple tables (separated by ---), use UNION ALL to combine results from all tables.
+10. UNION ALL and ORDER BY: ORDER BY after a UNION ALL must use only column names that appear in all SELECT clauses (e.g. ORDER BY name). If you need a complex sort expression (CASE, subquery, etc.), include the sort key as a column in every SELECT and order by that column:
+    SELECT *, 0 AS src FROM table_a WHERE ... UNION ALL SELECT *, 1 AS src FROM table_b WHERE ... ORDER BY src, name
+    Never reference a specific source table inside ORDER BY after a UNION ALL.
+
+EXAMPLES (tie-safe extremum queries):
+Q: "What is the highest rated game?" → SELECT name, review FROM games_2025 WHERE review = (SELECT MAX(review) FROM games_2025)
+Q: "Which game has the lowest score?" → SELECT name, review FROM games_2025 WHERE review = (SELECT MIN(review) FROM games_2025)
+Q: "Were there fighting games in 2025 and 2026?" → SELECT name, category FROM games_2025 WHERE category ILIKE '%fighting%' UNION ALL SELECT name, category FROM games_2026 WHERE category ILIKE '%fighting%'
+Q: "List games from 2025 and 2026, show year" → SELECT name, category, summary, 2025 AS year FROM games_2025 WHERE ... UNION ALL SELECT name, category, summary, 2026 AS year FROM games_2026 WHERE ... ORDER BY year, name
+"""
 
     @staticmethod
     def get_hallucination_grader_agent() -> str:

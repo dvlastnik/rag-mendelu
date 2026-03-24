@@ -64,21 +64,6 @@ def evaluation_logger(model_name, questions_file):
         total = len(session_results)
         passed = sum(1 for r in session_results if r['status'] == 'PASSED')
 
-        # Confusion matrix based on the two judge dimensions (threshold >= 4):
-        #   TP = relevant + faithful (PASSED)
-        #   FP = relevant but not faithful
-        #   FN = faithful but not relevant
-        #   TN = neither relevant nor faithful
-        tp = sum(1 for r in session_results if r['scores']['relevancy'] >= 4 and r['scores']['faithfulness'] >= 4)
-        fp = sum(1 for r in session_results if r['scores']['relevancy'] >= 4 and r['scores']['faithfulness'] < 4)
-        fn = sum(1 for r in session_results if r['scores']['relevancy'] < 4 and r['scores']['faithfulness'] >= 4)
-        tn = sum(1 for r in session_results if r['scores']['relevancy'] < 4 and r['scores']['faithfulness'] < 4)
-
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall    = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1        = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-        accuracy  = (tp + tn) / total if total > 0 else 0.0
-
         final_report = {
             'metadata': {
                 'duration_seconds': round(duration, 2),
@@ -86,13 +71,7 @@ def evaluation_logger(model_name, questions_file):
                 'total_tests': total,
                 'passed': passed,
                 'failed': total - passed,
-                'success_rate': round(passed / total, 2),
-                'ml_metrics': {
-                    'accuracy_percent': round(accuracy * 100, 2),
-                    'precision_percent': round(precision * 100, 2),
-                    'recall_percent': round(recall * 100, 2),
-                    'f1_percent': round(f1 * 100, 2),
-                }
+                'success_rate': round((passed / total) * 100, 2),
             },
             'details': session_results
         }
@@ -129,13 +108,17 @@ def test_rag_quality(data, judge):
         'id': data['id'],
         'question': data['question'],
         'answer': data['generated_answer'],
-        'original_query': data.get('original_query', ''),
-        'extracted_data': data['extracted_data'],
+        'original_query': data['original_query'],
         'retrieved_sources': data['retrieved_sources'],
-        'distilled_facts': data.get('distilled_facts', []),
+        'distilled_facts': data['distilled_facts'],
         'rewritten_queries': data['rewritten_queries'],
-        'retrieval_iterations': data.get('retrieval_iterations', 0),
-        'completeness_follow_up_query': data.get('completeness_follow_up_query', ''),
+        'intent': data['intent'],
+        'detected_source': data['detected_source'],
+        'query_plan': data['query_plan'],
+        'sql_result': data['sql_result'],
+        'hallucination_status': data['hallucination_status'],
+        'retrieval_iterations': data['retrieval_iterations'],
+        'completeness_follow_up_query': data['completeness_follow_up_query'],
         'true_answer': data['ground_truth'],
         'scores': {
             'relevancy': eval_result.relevancy_score,

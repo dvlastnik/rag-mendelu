@@ -193,11 +193,13 @@ class TableProcessor:
         row_documents = []
         for table in tables:
             for row_cells in table.rows:
-                row_meta: Dict = {**base_metadata, 'is_table': True}
+                row_col_meta: Dict = {}
                 for i, header in enumerate(table.headers):
                     key = header.lower().replace(' ', '_')
                     raw = row_cells[i] if i < len(row_cells) else ''
-                    row_meta[key] = self.extractor._infer_type(raw)
+                    row_col_meta[key] = self.extractor._infer_type(raw)
+            
+                row_meta = {**row_col_meta, **base_metadata, 'is_table': True}
 
                 row_documents.append({
                     'text': '| ' + ' | '.join(row_cells) + ' |',
