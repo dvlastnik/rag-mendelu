@@ -8,8 +8,8 @@ from rag.agents.enums import NodeName
 from rag.agents.nodes.general_nodes import GeneralNodes
 from rag.agents.nodes.rag_nodes import RagNodes
 
-from database.base.BaseDbRepository import BaseDbRepository
-from database.DuckDbRepository import DuckDbRepository
+from database.base.base_db_repository import BaseDbRepository
+from database.duck_db_repository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
@@ -54,8 +54,8 @@ def build_graph(
         llm,
         database_service,
         embedding_service,
-        context_window=context_window,
         duck_db_repo=duck_db_repo,
+        context_window=context_window,
         available_sources=available_sources,
     )
 

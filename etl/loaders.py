@@ -1,8 +1,8 @@
 from functools import wraps
 from typing import Any, Callable, Dict
 
-from etl.BaseEtl import BaseEtl
-from etl.EtlState import ETLState
+from etl.base_etl import BaseEtl
+from etl.etl_state import ETLState
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

@@ -6,15 +6,14 @@ import pandas as pd
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 
-from etl.BaseEtl import BaseEtl, ETLState
+from etl.base_etl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
-from database.base.MyDocument import MyDocument, SparseVector
-from database.DuckDbRepository import DuckDbRepository
+from database.base.my_document import MyDocument, SparseVector
+from database.duck_db_repository import DuckDbRepository
 from text_embedding.text_embedding_service import TextEmbeddingService
 from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
 from semantic_chunking.similiar_sentence_splitter import SimilarSentenceSplitter
-from utils.utils import Utils
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

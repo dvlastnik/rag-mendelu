@@ -5,9 +5,9 @@ from qdrant_client.http.models import Distance, VectorParams, PointStruct
 import ast
 import difflib
 
-from database.base.MyDocument import MyDocument
-from database.base.DbOperationResult import DbOperationResult
-from database.base.BaseDbRepository import BaseDbRepository
+from database.base.my_document import MyDocument
+from database.base.db_operation_result import DbOperationResult
+from database.base.base_db_repository import BaseDbRepository
 from utils.logging_config import highlight_log
 
 # Fields to create payload indexes on (improves filter performance)

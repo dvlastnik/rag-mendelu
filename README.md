@@ -1,6 +1,6 @@
 # AgenticRAG
 
-An agent-based Retrieval-Augmented Generation (RAG) system built with Python 3.13+. The system combines a multi-strategy ETL pipeline with a LangGraph agentic workflow to deliver accurate, grounded answers from a mixed document knowledge base.
+Agentic Retrieval-Augmented Generation (RAG) system built with Python. The system combines a multi-strategy ETL pipeline with a LangGraph agentic workflow to deliver accurate, grounded answers from a mixed document knowledge base.
 
 ## Key Features
 

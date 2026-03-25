@@ -5,13 +5,13 @@ import pandas as pd
 import traceback
 
 from typing import Type
-from database.base.BaseDbRepository import BaseDbRepository
-from etl.EtlState import ETLState
+from database.base.base_db_repository import BaseDbRepository
+from etl.etl_state import ETLState
 from utils.utils import Utils
 from utils.logging_config import get_logger, highlight_log
 from etl.converters import convert_data
 from text_embedding import TextEmbeddingService
-from database.base.MyDocument import MyDocument
+from database.base.my_document import MyDocument
 
 
 logger = get_logger(__name__)

@@ -11,9 +11,9 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 sys.path.append(project_root)
 
 from text_embedding import TextEmbeddingService
-from database.QdrantDbRepository import QdrantDbRepository
-from database.DuckDbRepository import DuckDbRepository
-from rag.AgenticRAG import AgenticRAG
+from database.qdrant_db_repository import QdrantDbRepository
+from database.duck_db_repository import DuckDbRepository
+from rag.agentic_rag import AgenticRAG
 
 def get_results_filepath(model_name: str, questions_file: str = '') -> str:
     current_timestamp = datetime.now().strftime("%y%m%d")

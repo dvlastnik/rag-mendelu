@@ -11,8 +11,8 @@ from rag.agents.state import AgentState, WorkerState
 from rag.agents.models import MultiQuery, GradeHallucinations, CompletenessCheck, QueryPlan, QueryStrategy, SQLQueryPlan
 from rag.agents.enums import NodeName, Intent
 from rag.agents.prompts import Prompts
-from database.base.BaseDbRepository import BaseDbRepository
-from database.DuckDbRepository import DuckDbRepository
+from database.base.base_db_repository import BaseDbRepository
+from database.duck_db_repository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
@@ -42,8 +42,8 @@ class RagNodes:
         llm: BaseChatModel,
         db_repository: BaseDbRepository,
         embedding_service: TextEmbeddingService,
+        duck_db_repo: DuckDbRepository,
         context_window: int = 8192,
-        duck_db_repo: DuckDbRepository | None = None,
         available_sources: List[str] | None = None,
     ):
         self.llm = llm
