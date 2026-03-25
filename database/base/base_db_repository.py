@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Type, Any
 
-from database.base.MyDocument import MyDocument
-from database.base.DbOperationResult import DbOperationResult, execute_and_check_db_operation
+from database.base.my_document import MyDocument
+from database.base.db_operation_result import DbOperationResult, execute_and_check_db_operation
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

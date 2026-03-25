@@ -3,7 +3,7 @@ from langgraph.graph import add_messages
 from typing import Annotated, List
 from typing_extensions import TypedDict
 
-from database.base.MyDocument import MyDocument
+from database.base.my_document import MyDocument
 from rag.agents.enums import Intent
 from rag.agents.models import QueryPlan
 

@@ -4,8 +4,8 @@ import traceback
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 
-from database.base.BaseDbRepository import BaseDbRepository
-from database.DuckDbRepository import DuckDbRepository
+from database.base.base_db_repository import BaseDbRepository
+from database.duck_db_repository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from rag.agents.graph import build_graph
 from utils.logging_config import get_logger

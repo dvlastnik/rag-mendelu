@@ -5,15 +5,13 @@ from dotenv import load_dotenv
 import datetime
 from pathlib import Path
 
-from database.QdrantDbRepository import QdrantDbRepository
-from database.base.BaseDbRepository import BaseDbRepository
-from database.DuckDbRepository import DuckDbRepository
-from etl.GeneralEtl import GeneralEtl
+from database.qdrant_db_repository import QdrantDbRepository
+from database.base.base_db_repository import BaseDbRepository
+from database.duck_db_repository import DuckDbRepository
+from etl.general_etl import GeneralEtl
 from text_embedding import TextEmbeddingService
-from rag.AgenticRAG import AgenticRAG
+from rag.agentic_rag import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
-from utils.utils import Utils
-import constants
 
 load_dotenv()
 
