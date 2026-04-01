@@ -78,14 +78,22 @@ class DuckDbRepository:
             logger.error(f"Failed to get schema for '{table}': {e}")
             return f"Table: {table}\n(schema unavailable: {e})"
 
-    def get_compact_catalog(self) -> str:
+    def get_compact_catalog(self, available_sources: list[str] | None = None) -> str:
         """One-line-per-table compact schema summary for LLM context injection.
 
         Format: table_name(col1:type, col2:type, ...) [N rows]
         Returns empty string if no tables are registered.
+        When available_sources is provided, only tables whose name is in that list are included
+        (used to scope the catalog to the active Qdrant collection).
         """
         lines = []
-        for table in self.list_tables():
+        all_tables = self.list_tables()
+        filtered = (
+            [t for t in all_tables if t in available_sources]
+            if available_sources is not None
+            else all_tables
+        )
+        for table in filtered:
             try:
                 cols = self.conn.execute(f'DESCRIBE "{table}"').df()
                 col_strs = [

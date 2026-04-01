@@ -1,5 +1,6 @@
 import re
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import cast, Literal, List
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
@@ -49,10 +50,10 @@ class RagNodes:
         self.llm = llm
         self.db_repository = db_repository
         self.embedding_service = embedding_service
-        self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2')
+        self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir=str(Path.home() / '.cache' / 'flashrank'))
         self.duck_db_repo = duck_db_repo
         self.available_sources = available_sources or []
-        self._compact_catalog = duck_db_repo.get_compact_catalog() if duck_db_repo else ""
+        self._compact_catalog = duck_db_repo.get_compact_catalog(available_sources=self.available_sources) if duck_db_repo else ""
 
         params = ModelParams.create_from_context_window(context_window)
         self.distiller_top_n = params.top_n

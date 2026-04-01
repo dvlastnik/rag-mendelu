@@ -9,7 +9,7 @@ def pytest_addoption(parser):
     parser.addoption(
         "--model", 
         action="store", 
-        default="llama3.1:8b", 
+        default="ministral-3:8b", 
         help="Name of the model to use for RAG"
     )
 

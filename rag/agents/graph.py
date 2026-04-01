@@ -1,3 +1,4 @@
+import os
 import re
 
 from langgraph.graph import StateGraph, START, END
@@ -33,7 +34,7 @@ def _context_window_from_model(model_name: str) -> int:
 def build_graph(
     database_service: BaseDbRepository,
     embedding_service: TextEmbeddingService,
-    model_name: str = 'llama3.1:8b',
+    model_name: str = "ministral-3:8b",
     duck_db_repo: DuckDbRepository | None = None,
 ):
     context_window = _context_window_from_model(model_name)
@@ -41,6 +42,7 @@ def build_graph(
 
     llm = ChatOllama(
         model=model_name,
+        base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
         temperature=0,
         num_ctx=context_window,
         keep_alive='5m',

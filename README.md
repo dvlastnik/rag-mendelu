@@ -15,100 +15,270 @@ Agentic Retrieval-Augmented Generation (RAG) system built with Python. The syste
     * **Semantic Chunking:** Splits text based on sentence similarity rather than fixed character counts.
     * **Hybrid Embeddings:** Generates both dense and sparse vectors for optimal retrieval.
 * **Agentic RAG:** A LangGraph pipeline with specialized agents (Router, QueryPlanner, ResearchWorker, RetrievalGrader, FactExtractor, Synthesizer, CompletenessChecker, HallucinationGrader) that routes each query to the most effective retrieval strategy.
+* **Interactive TUI:** Running the app with no arguments launches an [InquirerPy](https://inquirerpy.readthedocs.io/) wizard that guides you through mode selection, model choice (from `ollama list`), and collection selection — no flags required.
 
 ---
 
 ## Prerequisites
 
-1. **Docker & Docker Compose:** Required to run Qdrant.
-2. **Ollama:** Must be running locally or accessible via network (defaults to `localhost:11434`).
-3. **uv:** For Python dependency management.
+**To run via Docker (recommended):**
+1. **Docker & Docker Compose** — runs both Qdrant and the app container.
+2. **[Ollama](https://ollama.com)** — must be installed and running **locally on the host** (not in Docker). This ensures GPU acceleration works natively on all platforms — NVIDIA, AMD (ROCm), and Apple Silicon (Metal).
+
+**To run locally with uv (no app container):**
+1. **[uv](https://github.com/astral-sh/uv)** — Python package manager used by this project.
+2. **Docker & Docker Compose** — still needed to run Qdrant.
+3. **[Ollama](https://ollama.com)** — same as above.
 
 ---
 
-## Installation & Setup
+## Quick Start
 
-### 1. Start Infrastructure
+> **The recommended way to use this app is the interactive TUI.** All CLI flags (`--chat`, `--run-etl`, `--ask`, etc.) are also supported for scripting and automation, but the TUI is the primary interface.
 
-A `docker-compose.yaml` file is provided that starts **Qdrant** (vector DB). DuckDB runs embedded and requires no separate service.
+### 1. Start Ollama and infrastructure
 
-```bash
-docker-compose up -d
-```
-
-### 2. Install dependencies
+Ollama runs on your host machine so it can use your GPU natively (NVIDIA, AMD, Apple Silicon):
 
 ```bash
-uv sync
+# Start ollama
+ollama serve
+
+# Pull the default model:
+ollama pull ministral-3:8b
 ```
 
-### 3. Environment config
+Then start Qdrant:
 
-Create a `.env` file in the root directory:
-
+```bash
+docker compose up -d
 ```
-QDRANT_GRPC_PORT=6334
-QDRANT_REST_PORT=6333
-COLLECTION_NAME_DROUGH=drough
+
+Check that everything is ready:
+
+```bash
+docker compose ps
+ollama list   # confirm model is available
+```
+
+### 2. Run the interactive TUI
+
+Launch the app with no arguments to start the wizard:
+
+```bash
+docker compose run --rm -it app
+```
+
+The TUI wizard will guide you through:
+1. **Save logs to a file?** — if yes, all logs are written to `/log/YYYYMMDD.log` (e.g. `/log/20260401.log`); terminal stays clean
+2. **What to do** — Chat, Ask a question, Run ETL, or Check databases
+3. **LLM model** — picked from `ollama list` (or enter manually)
+4. **Collection** — select an existing Qdrant collection or create a new one
+5. Mode-specific options (file path, erase flag, embedding model, etc.)
+
+When you choose **Chat** or **Ask**, a rich terminal chat interface launches:
+- Header shows the active model name
+- `.` `..` `...` animation plays while the RAG pipeline is running
+- Response is displayed under `Assistant (model):` with a numbered **Sources** list
+
+When you choose **Run ETL**, place your files in `./data/input/` first — the wizard will prompt for the path inside the container (`/data/input/`).
+
+Supported formats: `.pdf`, `.docx`, `.pptx`, `.md`, `.txt`, `.csv`, `.xlsx`
+
+### 3. Direct CLI usage (scripting / automation)
+
+All operations are also available as CLI flags, bypassing the TUI entirely:
+
+```bash
+# Ingest documents
+docker compose run --rm app --run-etl --path /data/input/
+
+# Interactive chat
+docker compose run --rm -it app --chat --collection-name my_collection
+
+# Single question
+docker compose run --rm -it app --ask "What is X?" --collection-name my_collection
+
+# Check database status
+docker compose run --rm app --check-dbs
 ```
 
 ---
 
 ## Usage
 
-### 1. Ingest data (ETL)
-
-Process a single file or an entire folder. Supports `.pdf`, `.docx`, `.pptx`, `.md`, `.txt`, `.csv`, `.xlsx`.
+### Ingest data (ETL)
 
 ```bash
-uv run main.py --run-etl --path /path/to/your/folder
+# Ingest a single file or entire folder
+docker compose run --rm app --run-etl --path /data/input/myfile.pdf
+
+# Erase the existing collection first, then ingest
+docker compose run --rm app --run-etl --erase --path /data/input/
+
+# Use a custom embedding model
+docker compose run --rm app --run-etl --embed-model BAAI/bge-m3 --path /data/input/
+
+# Specify a custom Qdrant collection name
+docker compose run --rm app --run-etl --collection-name MyCollection --path /data/input/
 ```
 
-Erase the existing collection first, then ingest:
+#### Getting files into the container
+
+The `./data/input/` folder on your host is bind-mounted read-only as `/data/input` inside the app container:
 
 ```bash
-uv run main.py --run-etl --erase --path /path/to/your/folder
+# Copy files to the input folder
+cp myfile.pdf ./data/input/
+cp -r myfolder/ ./data/input/
+
+# Or mount an arbitrary host path directly (no copying needed)
+docker compose run --rm -v /absolute/path/to/files:/data/input:ro app --run-etl --path /data/input/
 ```
 
-Use recursive (fixed-size) chunking instead of the default semantic chunking:
+### Run chat
 
 ```bash
-uv run main.py --run-etl --recursive-chunking --path /path/to/your/folder
+docker compose run --rm -it app --chat --collection-name collection_name
+
+# Use a different LLM model
+docker compose run --rm -it app --model llama3.2:3b --chat --collection-name collection_name
 ```
 
-Use a custom embedding model (any fastembed or HuggingFace model):
+### Ask
 
 ```bash
-uv run main.py --run-etl --embed-model BAAI/bge-m3 --path /path/to/your/folder
+docker compose run --rm -it app --ask "question" --collection-name collection_name
+
+# Use a different LLM model
+docker compose run --rm -it app --model llama3.2:3b --ask "question" --collection-name collection_name
 ```
 
-Specify a custom Qdrant collection name:
+### Check database status
 
 ```bash
-uv run main.py --run-etl --collection-name MyCollection --path /path/to/your/folder
+docker compose run --rm app --check-dbs
 ```
 
-### 2. Run chat
+### Teardown
 
 ```bash
-uv run main.py --chat
+# Stop containers (data volumes are preserved)
+docker compose down
+
+# Stop and delete all data volumes
+docker compose down -v
 ```
 
-Specify a different LLM model:
+---
+
+## Local Development (uv)
+
+Use this approach when you want to run the Python app directly on your machine — no app container, no image builds, instant code changes take effect.
+
+### 1. Start Qdrant only
 
 ```bash
-uv run main.py --model llama3.1:8b --chat
+docker compose up -d qdrant
 ```
 
-### 3. Check database status
+Qdrant is the only service that still runs in Docker. The app and Ollama run on your host.
+
+### 2. Install Python dependencies
 
 ```bash
+uv sync
+```
+
+This creates a `.venv` in the project root and installs all dependencies from `uv.lock`.
+
+### 3. Pull your Ollama model
+
+```bash
+ollama pull ministral-3:8b
+```
+
+### 4. Launch the TUI
+
+```bash
+uv run main.py
+```
+
+Works identically to the Docker TUI. File paths entered in the ETL wizard are real host paths — no bind-mounts or copying needed.
+
+### 5. Common commands
+
+```bash
+# Interactive TUI (no args)
+uv run main.py
+
+# Chat directly
+uv run main.py --chat --collection-name my_collection
+
+# Ingest a file or folder (use real host paths)
+uv run main.py --run-etl --path /path/to/your/files/
+
+# Single question
+uv run main.py --ask "What is X?" --collection-name my_collection
+
+# Use a custom embedding model
+uv run main.py --embed-model BAAI/bge-m3 --chat
+
+# Check databases
 uv run main.py --check-dbs
+```
+
+### 6. Run tests
+
+```bash
+# Unit tests — no infrastructure needed
+uv run pytest tests/agent/
+
+# RAG quality tests — requires running Qdrant + a populated collection
+uv run pytest tests/rag/ --model ministral-3:8b --questions tests/rag/questions/questions.json
+```
+
+### Environment variables
+
+The same `.env` variables apply. For local dev, `QDRANT_HOST` defaults to `localhost` and `OLLAMA_HOST` defaults to `http://localhost:11434` — both correct without any overrides.
+
+---
+
+## Configuration
+
+All settings have sensible defaults — no `.env` file is required for a basic setup.
+
+Create a `.env` file in the root directory to override defaults:
+
+```
+OLLAMA_MODEL=ministral-3:8b
+COLLECTION_NAME=default_name
+QDRANT_REST_PORT=6333
+QDRANT_GRPC_PORT=6334
+VECTOR_DB_DISTANCE=DOT
+LOG_LEVEL=INFO
 ```
 
 ---
 
 ## Architecture
+
+### Services
+
+| Service | Image | Role |
+|---|---|---|
+| `qdrant` | `qdrant/qdrant` | Vector database (hybrid dense + sparse search) |
+| `app` | built from `Dockerfile` | Python CLI — invoke with `docker compose run` |
+
+> **Ollama** runs on the host (not in Docker). The app container reaches it via `host.docker.internal:11434`.
+
+### Data Volumes
+
+| Volume | Contents |
+|---|---|
+| `qdrant_data` | Qdrant vector storage |
+| `app_data` | ETL converted Markdown output |
+| `duckdb_data` | DuckDB analytical database file |
 
 ### Supported File Types
 
@@ -124,8 +294,8 @@ uv run main.py --check-dbs
 1. **Convert**: Docling converts PDF/DOCX/PPTX to Markdown. MD/TXT files are read directly. CSV/XLSX are loaded as DataFrames.
 2. **Extract Tables**: Markdown tables are pulled out, each row becomes a separate document with column values as typed metadata. Tables are also registered in DuckDB for SQL queries.
 3. **Split**: Remaining text is split by H1-H4 headers into logical sections.
-4. **Chunk**: Each section is split using semantic chunking (sentence similarity) or recursive character splitting.
-5. **Embed**: Dense (fastembed / sentence-transformers) and sparse (SPLADE) vectors are generated.
+4. **Chunk**: Each section is split using semantic chunking (sentence similarity).
+5. **Embed**: Dense (fastembed/sentence-transformers) and sparse (SPLADE) vectors are generated.
 6. **Store**: Documents with vectors and metadata are pushed to Qdrant. CSV/XLSX files are also registered in DuckDB.
 
 ### Agentic RAG Flow
@@ -165,7 +335,7 @@ graph TD;
         scroll_retriever(scroll_retriever)
         error_agent(error_agent)
         __end__([<p>__end__</p>]):::last
-        
+
         __start__ --> router_agent;
         analytical_query_agent -. " NodeName.RESEARCH_WORKER " .-> research_worker;
         analytical_query_agent -. " NodeName.SYNTHESIZER " .-> synthesizer_agent;
@@ -186,7 +356,7 @@ graph TD;
         synthesizer_agent --> completeness_checker_agent;
         error_agent --> __end__;
         general_agent --> __end__;
-        
+
         classDef default fill:#f2f0ff,line-height:1.2
         classDef first fill-opacity:0
         classDef last fill:#bfb6fc

@@ -4,20 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-**Setup:**
+**Docker (primary workflow):**
 ```bash
-docker-compose up -d    # Start Qdrant (port 6333)
-uv sync                 # Install Python dependencies
+# Ollama must be running on the host first (GPU used natively on any platform):
+#   macOS/Windows: open Ollama desktop app   |   Linux: ollama serve
+# Then pull your model:  ollama pull ministral-3:8b
+docker compose up -d                         # Start Qdrant only
+docker compose run --rm -it app              # Launch TUI wizard (no args)
+docker compose run --rm -it app --chat       # Interactive RAG chat (skip TUI)
+docker compose run --rm app --run-etl --path /data/input/   # Ingest from ./data/input/
+docker compose run --rm app --run-etl --erase --path /data/input/
+docker compose run --rm app --check-dbs
+# Mount arbitrary host path for ETL (no copying needed):
+docker compose run --rm -v /your/path:/data/input:ro app --run-etl --path /data/input/
 ```
 
-**Run the application:**
+**Local dev (no Docker, for tests and development):**
 ```bash
-uv run main.py --chat                                              # Start RAG chat
-uv run main.py --run-etl --path /path/to/file_or_folder           # Ingest any supported file(s)
-uv run main.py --run-etl --erase --path /path/to/file_or_folder   # Erase DB then ingest
-uv run main.py --run-etl --recursive-chunking --path ...          # Use recursive instead of semantic chunking
-uv run main.py --check-dbs                                         # Check collection stats
-uv run main.py --embed-model BAAI/bge-m3 --chat                   # Use a different embedding model (fastembed or HuggingFace)
+docker compose up -d qdrant   # Start only Qdrant (Ollama stays on host)
+uv sync                       # Install Python dependencies
+uv run main.py                # Launch interactive TUI (no args → TUI wizard)
+uv run main.py --chat
+uv run main.py --run-etl --path /path/to/file_or_folder
+uv run main.py --run-etl --erase --path /path/to/file_or_folder
+uv run main.py --run-etl --recursive-chunking --path ...
+uv run main.py --check-dbs
+uv run main.py --embed-model BAAI/bge-m3 --chat
 ```
 
 **Tests:**
@@ -27,8 +39,8 @@ uv run pytest tests/agent/
 
 # RAG quality tests (requires running infrastructure + populated DB)
 # These generate answers first, then judge them with an LLM
-uv run pytest tests/rag/ --model llama3.1:8b --questions tests/rag/questions/questions.json
-uv run pytest tests/rag/ --model llama3.1:8b --regen    # Force re-generation of answers
+uv run pytest tests/rag/ --model ministral-3:8b --questions tests/rag/questions/questions.json
+uv run pytest tests/rag/ --model ministral-3:8b --regen    # Force re-generation of answers
 uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collection
 
 # Run tests across all loaded Ollama models (size-sorted, smallest first)
@@ -39,8 +51,17 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 ## Architecture
 
 ### Infrastructure
-- **Qdrant** (localhost:6333): Vector database using hybrid search (dense + sparse vectors, 384-dim, DOT distance)
-- **Ollama** (localhost:11434): Local LLM runtime (default model: `llama3.1:8b`)
+- **Qdrant** (container, port 6333): Vector database using hybrid search (dense + sparse vectors, 384-dim, DOT distance); data in `qdrant_data` volume
+- **Ollama** (host process, port 11434): LLM runtime runs **locally on the host** (not in Docker) so GPU acceleration works natively on NVIDIA, AMD (ROCm), and Apple Silicon (Metal); app container reaches it via `host.docker.internal:11434`
+- **DuckDB** (embedded in app): No separate service; file at `data/sql/tabular.duckdb` persisted in `duckdb_data` volume
+- **app** (container, `profiles: [app]`): Python CLI; not auto-started by `docker compose up` — invoke with `docker compose run`
+
+**Environment variables** (set in `docker-compose.yaml`, override via `.env`):
+- `QDRANT_HOST` / `QDRANT_PORT` — Qdrant connection (default: `qdrant` / `6333`)
+- `OLLAMA_HOST` — Ollama base URL (default in Docker: `http://host.docker.internal:11434`; local dev: `http://localhost:11434`)
+- `OLLAMA_MODEL` — model to pull and use (default: `ministral-3:8b`)
+- `COLLECTION_NAME` — Qdrant collection (default: `default_name`)
+- `VECTOR_DB_DISTANCE` — distance metric (default: `DOT`)
 
 ### Module Overview
 
@@ -96,6 +117,15 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 - `Utils.convert_to_md(path, output_folder)` → converts any Docling-supported file to Markdown
 - `Utils.convert_pdf_to_md(path, output_folder)` → thin wrapper around `convert_to_md` (kept for compatibility)
 
+**`tui/`** — Interactive TUI wizard (InquirerPy)
+- `TuiWizard(default_model, qdrant_host, qdrant_port)` — launched from `main.py` when no CLI flags are provided
+- `run()` → returns `argparse.Namespace` consumed by the rest of `main()`
+- `_get_ollama_models()` → `@staticmethod`; parses `ollama list` output
+- `_get_qdrant_collections(host, port)` → `@staticmethod`; creates a temporary `QdrantClient` to fetch collection names; returns `[]` on any failure
+- **Chat/Ask**: selects from existing collections (text fallback if none found)
+- **ETL**: asks "New / Existing" first — new prompts for a name, existing shows a select list
+- All CLI flags (`--chat`, `--run-etl`, etc.) bypass the TUI entirely
+
 **`tests/`**
 - `tests/agent/` — Unit tests for RAG agent nodes with mocked dependencies
 - `tests/rag/` — End-to-end quality tests: `generate_answers.py` runs the full RAG pipeline and saves results to `tests/rag/results/`; `test_rag_custom.py` reads saved answers and judges them with an LLM `Judge`
@@ -119,8 +149,9 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 - Tests in `tests/rag/` require infrastructure running and a populated Qdrant collection
 - `DroughtEtl` is retained for the climate dataset but `GeneralEtl` is the active default
 - Reranker top-N is adaptive via `ModelParams.create_from_context_window()` — not a fixed 10
-- Re-indexing required when changing chunk parameters or switching embedding models: `uv run main.py --run-etl --erase --path <folder>`
-- DuckDB file is stored at `data/sql/tabular.duckdb`; `--erase` drops all DuckDB tables alongside the Qdrant collection
+- Re-indexing required when changing chunk parameters or switching embedding models: `docker compose run --rm app --run-etl --erase --path /data/input/`
+- DuckDB file is stored at `data/sql/tabular.duckdb` (in Docker: persisted in `duckdb_data` named volume); `--erase` drops all DuckDB tables alongside the Qdrant collection
+- ETL input files: place in `./data/input/` on the host (bind-mounted read-only to `/data/input` in the container); for ad-hoc paths: `docker compose run --rm -v /your/path:/data/input:ro app --run-etl --path /data/input/`
 
 ### Document Metadata Schema
 

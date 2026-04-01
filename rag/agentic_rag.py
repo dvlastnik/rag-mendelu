@@ -1,5 +1,9 @@
 from typing import Dict, Any
+import os
+import sys
 import traceback
+import urllib.request
+import urllib.error
 
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
@@ -12,14 +16,29 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+def _check_ollama_running() -> None:
+    base_url = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    try:
+        urllib.request.urlopen(f"{base_url}/api/tags", timeout=3)
+    except (urllib.error.URLError, OSError):
+        logger.error(
+            f"Cannot reach Ollama at {base_url}. "
+            "Please start Ollama first:\n"
+            "  macOS/Windows: open the Ollama desktop app\n"
+            "  Linux:         ollama serve"
+        )
+        sys.exit(1)
+
+
 class AgenticRAG:
     def __init__(
         self,
         database_service: BaseDbRepository,
         embedding_service: TextEmbeddingService,
         duck_db_repo: DuckDbRepository,
-        model_name: str = "llama3.1:8b",
+        model_name: str = "ministral-3:8b",
     ):
+        _check_ollama_running()
         logger.info(f"Agentic RAG configured with {model_name}")
         self.agents = build_graph(database_service, embedding_service, model_name, duck_db_repo=duck_db_repo)
         

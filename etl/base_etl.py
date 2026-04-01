@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
 import pathlib
 from typing import List, Dict
-import pandas as pd
 import traceback
 
-from typing import Type
 from database.base.base_db_repository import BaseDbRepository
 from etl.etl_state import ETLState
 from utils.utils import Utils
@@ -12,6 +10,7 @@ from utils.logging_config import get_logger, highlight_log
 from etl.converters import convert_data
 from text_embedding import TextEmbeddingService
 from database.base.my_document import MyDocument
+from utils.utils import Utils
 
 
 logger = get_logger(__name__)
@@ -115,6 +114,10 @@ class BaseEtl(ABC):
                     highlight_log(logger=logger, text="Loading", character='*', only_char=True)
                     logger.info(50*'=')
                     print()
+                    # delete temp file
+                    if self.df is None:
+                        path = Utils.get_output_path(self.file, self.OUTPUT_FOLDER)
+                        path.unlink(missing_ok=True)
                     return True
                 case ETLState.FILE_NOT_FOUND:
                     logger.error(f"File was not found for path: {self.file}")

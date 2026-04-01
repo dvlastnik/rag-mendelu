@@ -18,13 +18,13 @@ class BaseDbRepository(ABC):
         self.logger = get_logger(self.name)
 
     def connect_and_create_collection(self, delete_collection: bool):
-        execute_and_check_db_operation(operation=self.connect, operation_description=f".connect() {self.name}")
+        execute_and_check_db_operation(operation=self._connect, operation_description=f".connect() {self.name}")
         if delete_collection:
             execute_and_check_db_operation(operation=self.if_collection_exist_delete, operation_description=f"if_collection_exist_delete {self.name}")
             self.create_collection()
 
     @abstractmethod
-    def connect(self) -> DbOperationResult:
+    def _connect(self) -> DbOperationResult:
         pass
 
     @abstractmethod
