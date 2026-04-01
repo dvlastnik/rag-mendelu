@@ -7,7 +7,7 @@ class Judgement(BaseModel):
     reasoning: str = Field(description="Concise explanation for the scores.")
 
 class Judge:
-    def __init__(self, model_name="llama3.1:8b"):
+    def __init__(self, model_name="ministral-3:8b"):
         self.llm = init_chat_model(
             model=model_name,
             model_provider='ollama', 

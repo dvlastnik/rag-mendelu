@@ -50,7 +50,7 @@ def save_answers(results: List[Dict[str, any]], model_name: str, duration: float
     with open(output_path, 'w') as f:
         json.dump(output_data, f, indent=2)
     
-def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1:8b', collection_name: str = '') -> List[Dict[str, any]]:
+def generate_anwers(questions: List[Dict[str, any]], model_name: str = "ministral-3:8b", collection_name: str = '') -> List[Dict[str, any]]:
     embedding_service = TextEmbeddingService()
 
     valid_collection_name = 'drough'
@@ -59,8 +59,8 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = 'llama3.1
 
     duck_db = DuckDbRepository()
     db_repository = QdrantDbRepository(
-        ip='localhost', 
-        port=6333,
+        ip=os.environ.get("QDRANT_HOST", "localhost"),
+        port=int(os.environ.get("QDRANT_PORT", "6333")),
         collection_name=valid_collection_name,
         metadata={
             'vector_size': int(os.environ.get("VECTOR_DB_VECTOR_SIZE", 384)),

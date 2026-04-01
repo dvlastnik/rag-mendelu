@@ -23,7 +23,9 @@ dependencies = [
     "pytest>=9.0.2",
     "qdrant-client>=1.16.2",
     "spacy>=3.8.11",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     "duckdb>=1.5.1",
+    "inquirerpy>=0.3.4",
 ]
 
 [tool.pytest.ini_options]

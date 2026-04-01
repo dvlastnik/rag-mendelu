@@ -54,20 +54,11 @@ class GeneralEtl(BaseEtl):
         filepath: str,
         db_repositories: Dict,
         embedding_service: TextEmbeddingService,
-        duck_db_repo: DuckDbRepository,
-        use_semantic: bool = True,
+        duck_db_repo: DuckDbRepository
     ) -> None:
         super().__init__(filepath, db_repositories, embedding_service)
-        self.use_semantic = use_semantic
         self.duck_db_repo = duck_db_repo
         self.table_processor = TableProcessor()
-
-        self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=768,
-            chunk_overlap=200,
-            length_function=len,
-            separators=["\n\n", "\n", ". ", " ", ""],
-        )
 
         sentence_similarity = SentenceSimilarity(embedding_service=embedding_service)
         self.semantic_splitter = SimilarSentenceSplitter(similarity_model=sentence_similarity)
@@ -104,6 +95,7 @@ class GeneralEtl(BaseEtl):
             split_docs = self._split_by_headers(text_without_tables)
             total = len(split_docs)
             logger.info(f"Processing {total} sections from '{self.file.name}'...")
+            print(f"    {total} sections found")
 
             for i, doc in enumerate(split_docs, 1):
                 cleaned = self._clean_text(doc.page_content)
@@ -147,6 +139,7 @@ class GeneralEtl(BaseEtl):
                     df = pd.DataFrame(non_empty)
                     self.duck_db_repo.register_dataframe(self.file.stem, df)
 
+            print(f"    {len(self.documents)} chunks ready for embedding")
             logger.info(f"Transform complete: {len(self.documents)} documents from '{self.file.name}'")
             self.state = ETLState.TRANSFORMED
 
@@ -305,10 +298,7 @@ class GeneralEtl(BaseEtl):
     def _process_section(self, text: str, metadata: Dict) -> List[MyDocument]:
         """Chunk a section and embed each chunk into a MyDocument."""
         try:
-            if self.use_semantic:
-                raw_chunks = self.semantic_splitter.split_text(text)
-            else:
-                raw_chunks = self.splitter.split_text(text)
+            raw_chunks = self.semantic_splitter.split_text(text)
 
             valid_chunks = [
                 c.strip() for c in (raw_chunks or [])

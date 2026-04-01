@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import time
 from dotenv import load_dotenv
@@ -12,6 +13,8 @@ from etl.general_etl import GeneralEtl
 from text_embedding import TextEmbeddingService
 from rag.agentic_rag import AgenticRAG
 from utils.logging_config import get_logger, setup_logging, highlight_log
+from tui.tui import TuiWizard
+from tui.chat import TuiChat
 
 load_dotenv()
 
@@ -24,7 +27,6 @@ def run_etl_general(
         embedding_service: TextEmbeddingService,
         db_repository: BaseDbRepository,
         collection_name: str,
-        use_recursive_chunking: bool,
         duck_db=None,
     ):
     """Runs the general ETL pipeline on any supported file type."""
@@ -54,16 +56,19 @@ def run_etl_general(
         db_repository.collection_name = collection_name
     db_repository.connect_and_create_collection(delete_collection)
 
-    use_semantic = not use_recursive_chunking
+    succeeded = []
+    failed = []
+
+    print(f"\nIngesting {len(files)} file(s) into collection '{collection_name}'...\n")
 
     for file in files:
+        print(f"  -> {Path(file).name}")
         start_time = time.time()
 
         obj = GeneralEtl(
             filepath=file,
             db_repositories={'qdrant': db_repository},
             embedding_service=embedding_service,
-            use_semantic=use_semantic,
             duck_db_repo=duck_db,
         )
         status = obj.run()
@@ -72,10 +77,19 @@ def run_etl_general(
         highlight_log(logger, str(datetime.timedelta(seconds=elapsed)), character='~')
 
         if not status:
-            logger.warning('ETL failed, stopping entire pipeline...')
-            break
+            print(f"  x Failed:  {Path(file).name}")
+            logger.warning('ETL failed for %s, skipping...', Path(file).name)
+            failed.append(file)
+            continue
 
+        print(f"  v Done:    {Path(file).name}  ({datetime.timedelta(seconds=int(elapsed))})\n")
+        succeeded.append(file)
+
+    print(f"ETL complete — {len(succeeded)} succeeded, {len(failed)} failed.")
     highlight_log(logger, 'General ETL pipeline finished.')
+    logger.info('ETL Summary — succeeded (%d): %s', len(succeeded), [Path(f).name for f in succeeded])
+    if failed:
+        logger.warning('ETL Summary — failed (%d): %s', len(failed), [Path(f).name for f in failed])
 
 def check_databases(db_repository: BaseDbRepository):
     """Checks the record counts for configured databases."""
@@ -89,19 +103,52 @@ def check_databases(db_repository: BaseDbRepository):
     db_repository.logger.info(f'Metadata from database: {db_repository.valid_metadata}')
     db_repository.close()
 
-def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbRepository, model_name: str, duck_db: DuckDbRepository | None = None):
+def _format_result_json(result: dict) -> str:
+    """Serializes a rag.chat() result dict to a JSON string."""
+    sources = []
+    for doc in result.get('sources') or []:
+        sources.append({
+            'text': doc.text,
+            'score': doc.score,
+            'metadata': {k: v for k, v in (doc.metadata or {}).items()
+                         if k not in ('embedding', 'sparse_embedding')},
+        })
+
+    agent_state = result.get('agent_state') or {}
+    sql_result = agent_state.get('sql_result')
+
+    payload = {
+        'response': result.get('response', ''),
+        'sources': sources,
+        'distilled_facts': result.get('distilled_facts') or [],
+    }
+    if sql_result:
+        payload['sql_result'] = sql_result
+
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def _print_result(result: dict):
+    """Prints a rag.chat() result in human-readable format."""
+    print('//////////////////////////////////')
+    for index, source in enumerate(result['sources']):
+        print(f'--- Source {index}: ---')
+        print(f'Source from file: {source.metadata["source"]}')
+        print(f' Source Text: {source.text}')
+        print(f'-----------------------')
+    print('//////////////////////////////////')
+    for index, facts_block in enumerate(result['distilled_facts']):
+        print(f'Distilled facts [{index}]: {facts_block}')
+    print('----------------------------------')
+    print(f'Assistant: {result["response"]}')
+    print('----------------------------------')
+
+
+def run_rag_chat(rag: AgenticRAG, json_output: bool = False):
     """
     Starts the RAG chat mode.
     """
     highlight_log(logger, "Starting RAG chat mode...")
-
-    connect_result = db_repository.connect()    
-    if not connect_result.success:
-        logger.error(f"Failed to connect to ChromaDB for RAG: {connect_result.message}")
-        return
-
-    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name, duck_db_repo=duck_db)
-
     print("Assitant ready. Type 'exit' or press Ctrl+C to end program.")
     while True:
         try:
@@ -110,20 +157,26 @@ def run_rag_chat(embedding_service: TextEmbeddingService, db_repository: BaseDbR
                 break
 
             result = rag.chat(question)
-            print('//////////////////////////////////')
-            for index, source in enumerate(result['sources']):
-                print(f'--- Source {index}: ---')
-                print(f'Source from file: {source.metadata['source']}')
-                print(f' Source Text: {source.text}')
-                print(f'-----------------------')
-            print('//////////////////////////////////')
-            for index, facts_block in enumerate(result['distilled_facts']):
-                print(f'Distilled facts [{index}]: {facts_block}')
-            print('----------------------------------')
-            print(f'Assistant: {result['response']}')
-            print('----------------------------------')
+            if json_output:
+                print(_format_result_json(result))
+            else:
+                _print_result(result)
         except KeyboardInterrupt:
             break
+
+def ask_rag(question: str, rag: AgenticRAG, json_output: bool = False):
+    """
+    Only sends one question to rag which will return response and then exit.
+    """
+    highlight_log(logger, f"Asking RAG question: '{question}'")
+    try:
+        result = rag.chat(question)
+        if json_output:
+            print(_format_result_json(result))
+        else:
+            _print_result(result)
+    except KeyboardInterrupt:
+        pass
 
 def parse_args():
     parser = argparse.ArgumentParser(description='RAG app')
@@ -131,14 +184,8 @@ def parse_args():
     parser.add_argument(
         '--model',
         type=str,
-        default='llama3.1:8b',
+        default='ministral-3:8b',
         help='LLM name'
-    )
-
-    parser.add_argument(
-        '--run-etl',
-        action='store_true',
-        help='Run a ETL'
     )
 
     parser.add_argument(
@@ -146,12 +193,6 @@ def parse_args():
         type=str,
         default='',
         help='Name of the Qdrant collection'
-    )
-
-    parser.add_argument(
-        '--recursive-chunking',
-        action='store_true',
-        help='Whether to use recursive chunking'
     )
 
     parser.add_argument(
@@ -174,30 +215,63 @@ def parse_args():
     )
 
     parser.add_argument(
-        '--check-dbs',
-        action='store_true',
-        help='Check the status and count of all databases.'
-    )
-
-    parser.add_argument(
         '--erase',
         action='store_true',
         help='If to erase database before starting ETL'
     )
 
     parser.add_argument(
-        '--chat',
+        '--json-output',
         action='store_true',
-        help='Rag CHAT'
+        help='Output responses as JSON (only with --chat or --ask)'
     )
 
-    return parser.parse_args()
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        '--run-etl',
+        action='store_true',
+        help='Run a ETL'
+    )
+    mode_group.add_argument(
+        '--chat',
+        action='store_true',
+        help='Rag CHAT, interactive'
+    )
+    mode_group.add_argument(
+        '--ask',
+        type=str,
+        default='',
+        help='Only ask one question and get answer, NOT interactive'
+    )
+    mode_group.add_argument(
+        '--check-dbs',
+        action='store_true',
+        help='Check the status and count of all databases.'
+    )
+
+    args = parser.parse_args()
+
+    if args.erase and not args.run_etl:
+        parser.error('--erase can only be used with --run-etl')
+    if args.path and not args.run_etl:
+        parser.error('--path can only be used with --run-etl')
+    if args.json_output and not (args.chat or args.ask):
+        parser.error('--json-output can only be used with --chat or --ask')
+
+    return args
 
 def main():
     start_time = time.time()
     args = parse_args()
 
-    # Objects
+    if not any([args.run_etl, args.check_dbs, args.ask, args.chat]):
+        args = TuiWizard(
+            default_model=os.environ.get("OLLAMA_MODEL", "ministral-3:8b"),
+            qdrant_host=os.environ.get("QDRANT_HOST", "localhost"),
+            qdrant_port=int(os.environ.get("QDRANT_PORT", "6333")),
+        ).run()
+        setup_logging(silent_console=True, log_file=args.log_file)
+
     embedding_service = TextEmbeddingService(dense_model=args.embed_model)
     vector_size = embedding_service.get_embedding_dim()
     logger.info(
@@ -210,8 +284,8 @@ def main():
         collection_name = args.collection_name
 
     db_repository = QdrantDbRepository(
-        ip='localhost',
-        port=6333,
+        ip=os.environ.get("QDRANT_HOST", "localhost"),
+        port=int(os.environ.get("QDRANT_PORT", "6333")),
         collection_name=collection_name,
         metadata={
             'vector_size': vector_size,
@@ -228,19 +302,27 @@ def main():
             embedding_service=embedding_service,
             db_repository=db_repository,
             collection_name=collection_name,
-            use_recursive_chunking=args.recursive_chunking,
             duck_db=duck_db,
         )
-        
     elif args.check_dbs:
         check_databases(db_repository)
-    elif args.chat:
-        run_rag_chat(embedding_service, db_repository, args.model, duck_db=duck_db)
     else:
-        logger.info("No ETL or DB check specified. Running RAG chat mode by default.")
-        run_rag_chat(embedding_service, db_repository, args.model, duck_db=duck_db)
+        rag = AgenticRAG(
+            database_service=db_repository,
+            embedding_service=embedding_service,
+            model_name=args.model,
+            duck_db_repo=duck_db,
+        )
+        if getattr(args, 'tui_mode', False):
+            if args.ask:
+                TuiChat(rag, args.model).run_ask(args.ask)
+            else:
+                TuiChat(rag, args.model).run_chat()
+        elif args.ask:
+            ask_rag(args.ask, rag, json_output=args.json_output)
+        else:
+            run_rag_chat(rag, json_output=args.json_output)
 
-    # Close dbs
     duck_db.close()
     db_repository.close()
     
