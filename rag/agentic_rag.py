@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 
 from database.base.base_db_repository import BaseDbRepository
-from database.duck_db_repository import DuckDbRepository
+from database.postgresql_repository import PostgresqlRepository
 from text_embedding import TextEmbeddingService
 from rag.agents.graph import build_graph
 from utils.logging_config import get_logger
@@ -35,12 +35,12 @@ class AgenticRAG:
         self,
         database_service: BaseDbRepository,
         embedding_service: TextEmbeddingService,
-        duck_db_repo: DuckDbRepository,
+        sql_db_repo: PostgresqlRepository,
         model_name: str = "ministral-3:8b",
     ):
         _check_ollama_running()
         logger.info(f"Agentic RAG configured with {model_name}")
-        self.agents = build_graph(database_service, embedding_service, model_name, duck_db_repo=duck_db_repo)
+        self.agents = build_graph(database_service, sql_db_repo, embedding_service, model_name)
         
 
     def chat(self, question: str) -> Dict[str, Any]:

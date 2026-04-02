@@ -37,8 +37,7 @@
     {
         "id": 6,
         "question": "I want to play a game set in the Middle Ages or Bohemia. Are there any on the 2025 list, and how does their setting relate to Jan Žižka?",
-        "response": "Yes, 'Kingdom Come: Deliverance 2' is an Action RPG set in 15th-century Bohemia. This is the exact same location and time period as the Hussite Wars, which were led by the Bohemian general Jan Žižka between 1419 and 1434.",
-        "source": ["games_2025.csv", "hussite_wars.md"],
+        "response": "There are no games explicitly tied to **Jan Žižka** or the **Hussite Wars** on the 2025 list. However, *Kingdom Come: Deliverance 2* is set in **15th-century Bohemia** and could loosely relate to the broader medieval and Bohemian context of Žižka's era.",
         "difficulty": "hard"
     },
     {

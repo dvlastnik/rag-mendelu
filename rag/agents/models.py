@@ -66,7 +66,7 @@ class QueryPlan(BaseModel):
     )
     sql_sources: List[str] = Field(
         default_factory=list,
-        description="DuckDB table names to query. Required for sql/hybrid strategies. List 1 or more table names; multiple tables will be combined with UNION ALL."
+        description="PostgreSQL table names to query. Required for sql/hybrid strategies. List 1 or more table names; multiple tables will be combined with UNION ALL."
     )
     sql_hint: str | None = Field(
         default=None,

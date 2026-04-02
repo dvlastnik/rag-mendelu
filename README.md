@@ -6,11 +6,11 @@ Agentic Retrieval-Augmented Generation (RAG) system built with Python. The syste
 
 * **Modern Tooling:** Built using **[uv](https://github.com/astral-sh/uv)** for fast, reliable Python dependency management.
 * **Vector Database:** Utilizes **[Qdrant](https://qdrant.tech/)** for high-performance hybrid search (dense + sparse embeddings via SPLADE).
-* **Analytical Database:** Uses **[DuckDB](https://duckdb.org/)** (embedded, no extra service) for SQL-based aggregation and ranking queries on tabular data.
+* **Analytical Database:** Uses **[PostgreSQL](https://www.postgresql.org/)** for SQL-based aggregation and ranking queries on tabular data.
 * **Smart Ingestion:** Uses **[Docling](https://github.com/DS4SD/docling)** to accurately parse PDFs, DOCX, and PPTX files into clean Markdown.
 * **ETL Pipeline:**
     * Converts documents to Markdown (PDF, DOCX, PPTX, MD, TXT, CSV, XLSX).
-    * Extracts Markdown tables and stores them in both Qdrant and DuckDB.
+    * Extracts Markdown tables and stores them in both Qdrant and PostgreSQL.
     * Cleans and segments text by logical header sections.
     * **Semantic Chunking:** Splits text based on sentence similarity rather than fixed character counts.
     * **Hybrid Embeddings:** Generates both dense and sparse vectors for optimal retrieval.
@@ -22,12 +22,12 @@ Agentic Retrieval-Augmented Generation (RAG) system built with Python. The syste
 ## Prerequisites
 
 **To run via Docker (recommended):**
-1. **Docker & Docker Compose** — runs both Qdrant and the app container.
+1. **Docker & Docker Compose** — runs Qdrant, PostgreSQL, and the app container.
 2. **[Ollama](https://ollama.com)** — must be installed and running **locally on the host** (not in Docker). This ensures GPU acceleration works natively on all platforms — NVIDIA, AMD (ROCm), and Apple Silicon (Metal).
 
 **To run locally with uv (no app container):**
 1. **[uv](https://github.com/astral-sh/uv)** — Python package manager used by this project.
-2. **Docker & Docker Compose** — still needed to run Qdrant.
+2. **Docker & Docker Compose** — still needed to run Qdrant and PostgreSQL.
 3. **[Ollama](https://ollama.com)** — same as above.
 
 ---
@@ -48,7 +48,7 @@ ollama serve
 ollama pull ministral-3:8b
 ```
 
-Then start Qdrant:
+Then start Qdrant and PostgreSQL:
 
 ```bash
 docker compose up -d
@@ -176,13 +176,13 @@ docker compose down -v
 
 Use this approach when you want to run the Python app directly on your machine — no app container, no image builds, instant code changes take effect.
 
-### 1. Start Qdrant only
+### 1. Start Qdrant and PostgreSQL
 
 ```bash
-docker compose up -d qdrant
+docker compose up -d
 ```
 
-Qdrant is the only service that still runs in Docker. The app and Ollama run on your host.
+Qdrant and PostgreSQL run in Docker. The app and Ollama run on your host.
 
 ### 2. Install Python dependencies
 
@@ -257,6 +257,11 @@ QDRANT_REST_PORT=6333
 QDRANT_GRPC_PORT=6334
 VECTOR_DB_DISTANCE=DOT
 LOG_LEVEL=INFO
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=rag_mendelu
+POSTGRES_USER=rag
+POSTGRES_PASSWORD=rag_password
 ```
 
 ---
@@ -268,6 +273,7 @@ LOG_LEVEL=INFO
 | Service | Image | Role |
 |---|---|---|
 | `qdrant` | `qdrant/qdrant` | Vector database (hybrid dense + sparse search) |
+| `postgres` | `postgres:16-alpine` | Analytical SQL database for tabular data (CSV/XLSX) |
 | `app` | built from `Dockerfile` | Python CLI — invoke with `docker compose run` |
 
 > **Ollama** runs on the host (not in Docker). The app container reaches it via `host.docker.internal:11434`.
@@ -278,11 +284,11 @@ LOG_LEVEL=INFO
 |---|---|
 | `qdrant_data` | Qdrant vector storage |
 | `app_data` | ETL converted Markdown output |
-| `duckdb_data` | DuckDB analytical database file |
+| `postgres_data` | PostgreSQL analytical database |
 
 ### Supported File Types
 
-| Extension | Qdrant storage | DuckDB storage | Notes |
+| Extension | Qdrant storage | PostgreSQL storage | Notes |
 |---|---|---|---|
 | `.pdf`, `.docx`, `.pptx` | Text chunks + table rows | Extracted tables | Docling converts to Markdown |
 | `.md`, `.txt` | Text chunks + table rows | Extracted tables | Processed natively |
@@ -292,11 +298,11 @@ LOG_LEVEL=INFO
 ### ETL Flow
 
 1. **Convert**: Docling converts PDF/DOCX/PPTX to Markdown. MD/TXT files are read directly. CSV/XLSX are loaded as DataFrames.
-2. **Extract Tables**: Markdown tables are pulled out, each row becomes a separate document with column values as typed metadata. Tables are also registered in DuckDB for SQL queries.
+2. **Extract Tables**: Markdown tables are pulled out, each row becomes a separate document with column values as typed metadata. Tables are also registered in PostgreSQL for SQL queries.
 3. **Split**: Remaining text is split by H1-H4 headers into logical sections.
 4. **Chunk**: Each section is split using semantic chunking (sentence similarity).
 5. **Embed**: Dense (fastembed/sentence-transformers) and sparse (SPLADE) vectors are generated.
-6. **Store**: Documents with vectors and metadata are pushed to Qdrant. CSV/XLSX files are also registered in DuckDB.
+6. **Store**: Documents with vectors and metadata are pushed to Qdrant. CSV/XLSX files are also registered in PostgreSQL.
 
 ### Agentic RAG Flow
 
@@ -305,7 +311,7 @@ When you ask a question, a pipeline of agents collaborates:
 - **Router**: Classifies the query intent — `general`, `rag`, `rag_exhaustive`, or `rag_summarization`.
 - **General Agent**: Answers directly from LLM knowledge for non-retrieval queries.
 - **Query Planner**: Selects a retrieval strategy (`VECTOR`, `SQL`, `HYBRID`, `SCROLL`) and generates search queries.
-- **Analytical Query Agent**: Executes LLM-generated SQL against DuckDB for aggregation/ranking queries.
+- **Analytical Query Agent**: Executes LLM-generated SQL against PostgreSQL for aggregation/ranking queries.
 - **Research Worker**: Parallel hybrid search workers in Qdrant, one per query.
 - **Scroll Retriever**: Fetches all chunks from a specific source (used for summarization and exhaustive queries).
 - **Retrieval Grader**: Reranks all retrieved documents with FlashRank and keeps the top results.

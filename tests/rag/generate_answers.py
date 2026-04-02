@@ -12,7 +12,7 @@ sys.path.append(project_root)
 
 from text_embedding import TextEmbeddingService
 from database.qdrant_db_repository import QdrantDbRepository
-from database.duck_db_repository import DuckDbRepository
+from database.postgresql_repository import PostgresqlRepository
 from rag.agentic_rag import AgenticRAG
 
 def get_results_filepath(model_name: str, questions_file: str = '') -> str:
@@ -57,7 +57,13 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = "ministra
     if collection_name != '':
         valid_collection_name = collection_name
 
-    duck_db = DuckDbRepository()
+    sql_db = PostgresqlRepository(
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        db=os.environ.get("POSTGRES_DB", "rag_mendelu"),
+        user=os.environ.get("POSTGRES_USER", "rag"),
+        password=os.environ.get("POSTGRES_PASSWORD", "rag_password"),
+    )
     db_repository = QdrantDbRepository(
         ip=os.environ.get("QDRANT_HOST", "localhost"),
         port=int(os.environ.get("QDRANT_PORT", "6333")),
@@ -67,12 +73,8 @@ def generate_anwers(questions: List[Dict[str, any]], model_name: str = "ministra
             'distance': str(os.environ.get("VECTOR_DB_DISTANCE", "DOT"))
         }
     )
-    connect_result = db_repository.connect()    
-    if not connect_result.success:
-        print(f"Failed to connect to ChromaDB for RAG: {connect_result.message}")
-        return
 
-    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name, duck_db_repo=duck_db)
+    rag = AgenticRAG(database_service=db_repository, embedding_service=embedding_service, model_name=model_name, sql_db_repo=sql_db)
 
     results = []
     for q in tqdm(questions, desc='Generating RAG Answers'):

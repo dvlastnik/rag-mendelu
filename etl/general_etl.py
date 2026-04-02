@@ -9,7 +9,7 @@ from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharac
 from etl.base_etl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
 from database.base.my_document import MyDocument, SparseVector
-from database.duck_db_repository import DuckDbRepository
+from database.postgresql_repository import PostgresqlRepository
 from text_embedding.text_embedding_service import TextEmbeddingService
 from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
@@ -54,10 +54,10 @@ class GeneralEtl(BaseEtl):
         filepath: str,
         db_repositories: Dict,
         embedding_service: TextEmbeddingService,
-        duck_db_repo: DuckDbRepository
+        sql_db_repo: PostgresqlRepository
     ) -> None:
         super().__init__(filepath, db_repositories, embedding_service)
-        self.duck_db_repo = duck_db_repo
+        self.sql_db_repo = sql_db_repo
         self.table_processor = TableProcessor()
 
         sentence_similarity = SentenceSimilarity(embedding_service=embedding_service)
@@ -128,7 +128,7 @@ class GeneralEtl(BaseEtl):
                         metadata=table_meta,
                     ))
 
-            if self.duck_db_repo is not None and table_documents:
+            if self.sql_db_repo is not None and table_documents:
                 _INTERNAL = {'is_table', 'source', 'file_type'}
                 rows = [
                     {k: v for k, v in doc['metadata'].items() if k not in _INTERNAL}
@@ -137,7 +137,7 @@ class GeneralEtl(BaseEtl):
                 non_empty = [r for r in rows if r]
                 if non_empty:
                     df = pd.DataFrame(non_empty)
-                    self.duck_db_repo.register_dataframe(self.file.stem, df)
+                    self.sql_db_repo.register_dataframe(self.file.stem, df)
 
             print(f"    {len(self.documents)} chunks ready for embedding")
             logger.info(f"Transform complete: {len(self.documents)} documents from '{self.file.name}'")
@@ -235,12 +235,12 @@ class GeneralEtl(BaseEtl):
 
         logger.info(f"Tabular transform complete: {len(self.documents)} documents from '{self.file.name}'")
 
-        if self.duck_db_repo is not None:
+        if self.sql_db_repo is not None:
             suffix = self.file.suffix.lower()
             if suffix == '.csv':
-                self.duck_db_repo.register_csv(self.file.stem, str(self.file.resolve()))
+                self.sql_db_repo.register_csv(self.file.stem, str(self.file.resolve()))
             elif suffix == '.xlsx':
-                self.duck_db_repo.register_xlsx(self.file.stem, str(self.file.resolve()))
+                self.sql_db_repo.register_xlsx(self.file.stem, str(self.file.resolve()))
 
     @staticmethod
     def _coerce_value(val) -> int | float | bool | str:

@@ -5,36 +5,36 @@ class Prompts:
         if available_sources:
             sources_list = ", ".join(available_sources)
             sources_block = f"""
-        AVAILABLE SOURCES in the database: [{sources_list}]
-        If the user mentions a source by name (or a close variant), set detected_source to the matching source name from the list above."""
+            AVAILABLE SOURCES in the database: [{sources_list}]
+            If the user mentions a source by name (or a close variant), set detected_source to the matching source name from the list above."""
 
-        return f"""You are a strict Classification Bot.
-        You must classify the user query into one of four types: 'rag', 'exhaustive', 'summarization', or 'general'.
+            return f"""You are a strict Classification Bot.
+            You must classify the user query into one of four types: 'rag', 'exhaustive', 'summarization', or 'general'.
 
-        DEFINITIONS:
-        1. 'general': ONLY for greetings (Hi, Hello), goodbyes (Bye), or polite phrases (Thanks, Cool).
-        2. 'rag': Specific factual questions — single-answer lookups, comparisons, "what year did X happen?".
-        3. 'exhaustive': Listing or enumeration queries — "list all X", "every X mentioned", "all X in the database", "which X are there", "how many X". The user wants a comprehensive list, not a single answer.
-        4. 'summarization': Summarize or overview requests — "summarize document X", "give me an overview of X", "what is document X about".
+            DEFINITIONS:
+            1. 'general': ONLY for greetings (Hi, Hello), goodbyes (Bye), or polite phrases (Thanks, Cool).
+            2. 'rag': Specific factual questions — single-answer lookups, comparisons, "what year did X happen?".
+            3. 'exhaustive': Listing or enumeration queries — "list all X", "every X mentioned", "all X in the database", "which X are there", "how many X". The user wants a comprehensive list, not a single answer.
+            4. 'summarization': Summarize or overview requests — "summarize document X", "give me an overview of X", "what is document X about".
 
-        CRITICAL RULES:
-        - If the user asks a question -> NEVER 'general'.
-        - If the user refers to previous messages ("and Italy?") -> MUST be 'rag'.
-        - "Compare floods" is NOT general. It is 'rag'.
-        - "List all bands" is NOT 'rag'. It is 'exhaustive'.
-        - "Summarize the drought report" is 'summarization'.
-        - When in doubt between 'rag' and 'exhaustive', prefer 'exhaustive' if the user wants multiple items.
-        {sources_block}
-        EXAMPLES:
-        Input: "Hi there" -> general
-        Input: "Compare floods in Italy" -> rag
-        Input: "What year did Metallica form?" -> rag
-        Input: "List all music bands mentioned" -> exhaustive
-        Input: "What games are in the database?" -> exhaustive
-        Input: "Summarize the drought report" -> summarization
-        Input: "Give me an overview of history_of_metal" -> summarization
-        Input: "Thanks" -> general
-        """
+            CRITICAL RULES:
+            - If the user asks a question -> NEVER 'general'.
+            - If the user refers to previous messages ("and Italy?") -> MUST be 'rag'.
+            - "Compare floods" is NOT general. It is 'rag'.
+            - "List all bands" is NOT 'rag'. It is 'exhaustive'.
+            - "Summarize the drought report" is 'summarization'.
+            - When in doubt between 'rag' and 'exhaustive', prefer 'exhaustive' if the user wants multiple items.
+            {sources_block}
+            EXAMPLES:
+            Input: "Hi there" -> general
+            Input: "Compare floods in Italy" -> rag
+            Input: "What year did Metallica form?" -> rag
+            Input: "List all music bands mentioned" -> exhaustive
+            Input: "What games are in the database?" -> exhaustive
+            Input: "Summarize the drought report" -> summarization
+            Input: "Give me an overview of history_of_metal" -> summarization
+            Input: "Thanks" -> general
+            """
 
     @staticmethod
     def get_general_agent_prompt() -> str:
@@ -187,7 +187,7 @@ class Prompts:
         catalog_block = ""
         if compact_catalog:
             catalog_block = f"""
-SQL-QUERYABLE TABLES (DuckDB):
+SQL-QUERYABLE TABLES (PostgreSQL):
 {compact_catalog}
 
 Use strategy 'sql' when the question requires aggregation or filtering on these tables:
@@ -248,7 +248,7 @@ RULES:
 5. For aggregation: use GROUP BY when grouping is needed; COUNT(*) for row counts.
 6. Select the most informative columns — avoid SELECT * when specific columns suffice.
 7. Keep the query simple and direct — use subqueries only when needed for tie-safety (rule 3).
-8. String comparisons: use ILIKE for case-insensitive matching (DuckDB supports ILIKE).
+8. String comparisons: use ILIKE for case-insensitive matching (PostgreSQL supports ILIKE).
 9. When the schema contains multiple tables (separated by ---), use UNION ALL to combine results from all tables.
 10. UNION ALL and ORDER BY: ORDER BY after a UNION ALL must use only column names that appear in all SELECT clauses (e.g. ORDER BY name). If you need a complex sort expression (CASE, subquery, etc.), include the sort key as a column in every SELECT and order by that column:
     SELECT *, 0 AS src FROM table_a WHERE ... UNION ALL SELECT *, 1 AS src FROM table_b WHERE ... ORDER BY src, name

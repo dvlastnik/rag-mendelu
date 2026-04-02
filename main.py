@@ -8,7 +8,7 @@ from pathlib import Path
 
 from database.qdrant_db_repository import QdrantDbRepository
 from database.base.base_db_repository import BaseDbRepository
-from database.duck_db_repository import DuckDbRepository
+from database.postgresql_repository import PostgresqlRepository
 from etl.general_etl import GeneralEtl
 from text_embedding import TextEmbeddingService
 from rag.agentic_rag import AgenticRAG
@@ -27,7 +27,7 @@ def run_etl_general(
         embedding_service: TextEmbeddingService,
         db_repository: BaseDbRepository,
         collection_name: str,
-        duck_db=None,
+        sql_db=None,
     ):
     """Runs the general ETL pipeline on any supported file type."""
     highlight_log(logger, "Starting General ETL pipeline...")
@@ -48,9 +48,9 @@ def run_etl_general(
     else:
         files = [str(path_obj)]
 
-    if delete_collection and duck_db is not None:
+    if delete_collection and sql_db is not None:
         for file in files:
-            duck_db.drop_table(Path(file).stem)
+            sql_db.drop_table(Path(file).stem)
 
     if collection_name:
         db_repository.collection_name = collection_name
@@ -69,7 +69,7 @@ def run_etl_general(
             filepath=file,
             db_repositories={'qdrant': db_repository},
             embedding_service=embedding_service,
-            duck_db_repo=duck_db,
+            sql_db_repo=sql_db,
         )
         status = obj.run()
 
@@ -293,7 +293,13 @@ def main():
         }
     )
 
-    duck_db = DuckDbRepository()
+    sql_db = PostgresqlRepository(
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=int(os.environ.get("POSTGRES_PORT", "5432")),
+        db=os.environ.get("POSTGRES_DB", "rag_mendelu"),
+        user=os.environ.get("POSTGRES_USER", "rag"),
+        password=os.environ.get("POSTGRES_PASSWORD", "rag_password"),
+    )
 
     if args.run_etl:
         run_etl_general(
@@ -302,7 +308,7 @@ def main():
             embedding_service=embedding_service,
             db_repository=db_repository,
             collection_name=collection_name,
-            duck_db=duck_db,
+            sql_db=sql_db,
         )
     elif args.check_dbs:
         check_databases(db_repository)
@@ -311,7 +317,7 @@ def main():
             database_service=db_repository,
             embedding_service=embedding_service,
             model_name=args.model,
-            duck_db_repo=duck_db,
+            sql_db_repo=sql_db,
         )
         if getattr(args, 'tui_mode', False):
             if args.ask:
@@ -323,7 +329,7 @@ def main():
         else:
             run_rag_chat(rag, json_output=args.json_output)
 
-    duck_db.close()
+    sql_db.close()
     db_repository.close()
     
     end_time = time.time()

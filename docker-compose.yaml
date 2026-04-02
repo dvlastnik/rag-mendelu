@@ -21,6 +21,25 @@ services:
       timeout: 5s
       retries: 3
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    networks: [net]
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-rag_mendelu}"
+      POSTGRES_USER: "${POSTGRES_USER:-rag}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-rag_password}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   app:
     build:
       context: .
@@ -28,7 +47,6 @@ services:
     networks: [net]
     volumes:
       - app_data:/app/data/general
-      - duckdb_data:/app/data/sql
       - ./data/input:/app/data/input:ro
       - model_cache:/root/.cache
       - ./logs:/app/logs
@@ -41,15 +59,22 @@ services:
       VECTOR_DB_DISTANCE: "${VECTOR_DB_DISTANCE:-DOT}"
       LOG_LEVEL: "${LOG_LEVEL:-INFO}"
       FASTEMBED_CACHE_PATH: /root/.cache/fastembed
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "${POSTGRES_DB:-rag_mendelu}"
+      POSTGRES_USER: "${POSTGRES_USER:-rag}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-rag_password}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       qdrant:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     profiles: [app]
 
 volumes:
   qdrant_data:
   app_data:
-  duckdb_data:
+  postgres_data:
   model_cache:

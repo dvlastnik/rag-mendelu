@@ -1,19 +1,20 @@
 import pytest
-from unittest.mock import MagicMock, ANY
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from unittest.mock import MagicMock
+from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.types import Send
 from langgraph.graph import END
 
 from rag.agents.nodes.rag_nodes import RagNodes
 from rag.agents.enums import NodeName, Intent
-from rag.agents.models import GradeDocuments, GradeHallucinations, QueryPlan, QueryStrategy
+from rag.agents.models import QueryPlan, QueryStrategy
 
 # ==========================================
 # 1. QUERY PLANNER TESTS
 # ==========================================
 def test_query_planner_fallback_to_vector(rag_nodes, mock_llm):
-    """Positive: Without DuckDB catalog, falls back to vector decomposition."""
-    # rag_nodes fixture has no duck_db_repo, so _compact_catalog is ""
+    """Positive: When compact catalog is empty, falls back to vector decomposition."""
+    rag_nodes._compact_catalog = ""  # force fallback path regardless of sql_db_repo
+
     mock_runnable = MagicMock()
     mock_runnable.invoke.return_value = MagicMock(queries=["keyword query", "conceptual query"])
     mock_llm.with_structured_output.return_value = mock_runnable
@@ -29,10 +30,31 @@ def test_query_planner_fallback_to_vector(rag_nodes, mock_llm):
     assert "original question" in result['rewritten_queries']
     assert result['query_plan'].strategy == QueryStrategy.VECTOR
 
+def test_query_planner_uses_sql_strategy(rag_nodes, mock_llm):
+    """Positive: With SQL catalog present, planner can choose SQL strategy."""
+    mock_plan = MagicMock()
+    mock_plan.strategy = QueryStrategy.SQL
+    mock_plan.sql_sources = ["games_2025"]
+    mock_plan.sql_hint = "row with max review"
+    mock_plan.vector_queries = []
+
+    mock_runnable = MagicMock()
+    mock_runnable.invoke.return_value = mock_plan
+    mock_llm.with_structured_output.return_value = mock_runnable
+
+    state = {
+        'messages': [HumanMessage(content="what is the highest rated game?")],
+        'detected_source': None,
+        'intent': Intent.RAG,
+    }
+    result = rag_nodes.query_planner_agent(state)
+
+    assert result['query_plan'].strategy == QueryStrategy.SQL
+    assert result['query_plan'].sql_sources == ["games_2025"]
+
 # ==========================================
 # 2. RESEARCH WORKER TESTS
 # ==========================================
-
 def test_research_worker_negative_embedding_fail(rag_nodes, mock_embedding):
     """Negative: Embedding service returns None or error."""
     mock_embedding.get_embedding_with_uuid.return_value = []
@@ -48,7 +70,6 @@ def test_research_worker_negative_embedding_fail(rag_nodes, mock_embedding):
 # ==========================================
 # 3. RETRIEVAL GRADER TESTS
 # ==========================================
-
 def test_retrieval_grader_reranking(rag_nodes):
     """Positive: Reranks docs and returns top-N."""
     doc1 = MagicMock(id="1", text="Good Doc", metadata={"source": "test"})
@@ -113,10 +134,13 @@ def test_retrieval_grader_adaptive_topn_exhaustive(rag_nodes):
 # ==========================================
 def test_scroll_retriever_fetches_docs(rag_nodes, mock_db):
     """Scroll retriever fetches all docs from a source."""
-    mock_docs = [MagicMock(id=str(i)) for i in range(5)]
+    mock_docs = [MagicMock(id=str(i), text=f"Doc {i}", metadata={"source": "history_of_metal"}) for i in range(5)]
     mock_db.scroll_all_by_source.return_value = mock_docs
 
-    state = {'detected_source': 'history_of_metal'}
+    state = {
+        'detected_source': 'history_of_metal',
+        'messages': [HumanMessage(content="summarize history_of_metal")],
+    }
     result = rag_nodes.scroll_retriever(state)
 
     assert len(result['filtered_results']) == 5
@@ -131,9 +155,34 @@ def test_scroll_retriever_no_source(rag_nodes):
     assert result['filtered_results'] == []
 
 # ==========================================
-# 5. SYNTHESIZER TESTS
+# 5. ANALYTICAL QUERY TESTS
 # ==========================================
+def test_analytical_query_returns_fact(rag_nodes, mock_llm):
+    """Positive: SQL query executes and result is stored as distilled fact."""
+    import pandas as pd
+    mock_sql_plan = MagicMock()
+    mock_sql_plan.sql = 'SELECT name, review FROM games_2025 WHERE review = (SELECT MAX(review) FROM games_2025)'
+    mock_sql_plan.explanation = "Game with highest review score"
 
+    mock_runnable = MagicMock()
+    mock_runnable.invoke.return_value = mock_sql_plan
+    mock_llm.with_structured_output.return_value = mock_runnable
+
+    rag_nodes.sql_db_repo.run_select.return_value = pd.DataFrame({"name": ["Game1"], "review": [9.4]})
+
+    state = {
+        'messages': [HumanMessage(content="what is the highest rated game?")],
+        'query_plan': QueryPlan(strategy=QueryStrategy.SQL, sql_sources=["games_2025"], sql_hint="max review"),
+    }
+    result = rag_nodes.analytical_query_agent(state)
+
+    assert len(result['distilled_facts']) == 1
+    assert "games_2025" in result['distilled_facts'][0]
+    assert result['sql_result'] is not None
+
+# ==========================================
+# 6. SYNTHESIZER TESTS
+# ==========================================
 def test_synthesizer_positive_clean(rag_nodes, mock_llm):
     """Positive: Generates answer from distilled facts."""
     mock_llm.invoke.return_value = AIMessage(content="Final Answer")

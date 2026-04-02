@@ -13,7 +13,7 @@ from rag.agents.models import MultiQuery, GradeHallucinations, CompletenessCheck
 from rag.agents.enums import NodeName, Intent
 from rag.agents.prompts import Prompts
 from database.base.base_db_repository import BaseDbRepository
-from database.duck_db_repository import DuckDbRepository
+from database.postgresql_repository import PostgresqlRepository
 from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
@@ -43,7 +43,7 @@ class RagNodes:
         llm: BaseChatModel,
         db_repository: BaseDbRepository,
         embedding_service: TextEmbeddingService,
-        duck_db_repo: DuckDbRepository,
+        sql_db_repo: PostgresqlRepository,
         context_window: int = 8192,
         available_sources: List[str] | None = None,
     ):
@@ -51,9 +51,9 @@ class RagNodes:
         self.db_repository = db_repository
         self.embedding_service = embedding_service
         self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir=str(Path.home() / '.cache' / 'flashrank'))
-        self.duck_db_repo = duck_db_repo
+        self.sql_db_repo = sql_db_repo
         self.available_sources = available_sources or []
-        self._compact_catalog = duck_db_repo.get_compact_catalog(available_sources=self.available_sources) if duck_db_repo else ""
+        self._compact_catalog = sql_db_repo.get_compact_catalog(available_sources=self.available_sources)
 
         params = ModelParams.create_from_context_window(context_window)
         self.distiller_top_n = params.top_n
@@ -75,24 +75,29 @@ class RagNodes:
         else:
             user_input = f"Current question: {original_query}"
 
-        if not self.duck_db_repo or not self._compact_catalog:
+        if not self.sql_db_repo or not self._compact_catalog:
             return self._decompose_vector_queries(user_input, original_query, detected_source, intent)
 
         try:
             planner = self.llm.with_structured_output(QueryPlan)
-            plan = cast(QueryPlan, planner.invoke([
-                SystemMessage(content=Prompts.get_query_planner_prompt(
+
+            prompt = Prompts.get_query_planner_prompt(
                     self._compact_catalog,
                     self.available_sources,
-                )),
+                )
+            print(f"prompt for query planner: {prompt}")
+            plan = cast(QueryPlan, planner.invoke([
+                SystemMessage(prompt),
                 HumanMessage(content=user_input),
             ]))
+
+            print(f"plan: {plan}")
 
             if intent in (Intent.RAG_SUMMARIZATION, Intent.RAG_EXHAUSTIVE) and detected_source and plan.strategy == QueryStrategy.VECTOR:
                 plan = QueryPlan(strategy=QueryStrategy.SCROLL)
 
             if plan.strategy in (QueryStrategy.SQL, QueryStrategy.HYBRID) and plan.sql_sources:
-                known_tables = self.duck_db_repo.list_tables()
+                known_tables = self.sql_db_repo.list_tables()
                 valid_sources = [t for t in plan.sql_sources if t in known_tables]
                 unknown = [t for t in plan.sql_sources if t not in known_tables]
                 if unknown:
@@ -207,18 +212,18 @@ class RagNodes:
         return {'filtered_results': sorted_docs, 'search_results': docs}
 
     def analytical_query_agent(self, state: AgentState):
-        """Execute a SQL query on DuckDB and store the result as a distilled fact."""
-        logger.info("--- ANALYTICAL QUERY (DuckDB) ---")
+        """Execute a SQL query on PostgreSQL and store the result as a distilled fact."""
+        logger.info("--- ANALYTICAL QUERY (PostgreSQL) ---")
         plan = state.get('query_plan')
         original_question = state['messages'][-1].content
 
-        if not plan or not plan.sql_sources or not self.duck_db_repo:
-            logger.error("analytical_query_agent called without sql_sources or duck_db_repo — returning empty")
+        if not plan or not plan.sql_sources or not self.sql_db_repo:
+            logger.error("analytical_query_agent called without sql_sources or sql_db_repo — returning empty")
             return {"distilled_facts": [], "sql_result": None}
 
         sources_label = ", ".join(plan.sql_sources)
         combined_schema = "\n\n---\n\n".join(
-            self.duck_db_repo.get_schema(t) for t in plan.sql_sources
+            self.sql_db_repo.get_schema(t) for t in plan.sql_sources
         )
         hint = plan.sql_hint or original_question
 
@@ -230,7 +235,7 @@ class RagNodes:
             ]))
             logger.info(f"Generated SQL: {sql_plan.sql}")
 
-            df = self.duck_db_repo.run_select(sql_plan.sql)
+            df = self.sql_db_repo.run_select(sql_plan.sql)
             if df.empty:
                 logger.info("SQL returned no rows")
                 return {
