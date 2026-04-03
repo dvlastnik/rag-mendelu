@@ -50,6 +50,17 @@ def build_graph(
         timeout=120,
     )
 
+    llm_structured = ChatOllama(
+        model=model_name,
+        base_url=os.environ.get("OLLAMA_HOST", "http://localhost:11434"),
+        temperature=0,
+        num_ctx=context_window,
+        keep_alive='5m',
+        repeat_penalty=1.0,
+        timeout=120,
+        num_predict=512,
+    )
+
     available_sources = database_service.get_all_filenames()
     router_nodes = GeneralNodes(llm, available_sources=available_sources)
     rag_nodes = RagNodes(
@@ -59,6 +70,7 @@ def build_graph(
         sql_db_repo=sql_db_repo,
         context_window=context_window,
         available_sources=available_sources,
+        llm_structured=llm_structured,
     )
 
     builder = StateGraph(AgentState)

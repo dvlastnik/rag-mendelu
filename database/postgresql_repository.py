@@ -117,9 +117,17 @@ class PostgresqlRepository:
         """
         lines = []
         all_tables = self.list_tables()
+        safe_sources = (
+            {PostgresqlRepository._safe_table_name(s) for s in available_sources}
+            if available_sources is not None else None
+        )
         filtered = (
-            [t for t in all_tables if t in available_sources]
-            if available_sources is not None
+            [
+                t for t in all_tables
+                if t in safe_sources
+                or any(t.startswith(s + '_table') for s in safe_sources)
+            ]
+            if safe_sources is not None
             else all_tables
         )
         for table in filtered:
@@ -139,6 +147,35 @@ class PostgresqlRepository:
                     lines.append(f"{table}({', '.join(col_strs)}) [{count} rows]")
             except Exception as e:
                 logger.warning(f"get_compact_catalog: skipping '{table}': {e}")
+        return "\n".join(lines)
+
+    def get_table_names_catalog(self, available_sources: list[str] | None = None) -> str:
+        """Return table names + row counts only (no column details) for QueryPlanner context.
+
+        Keeps the QueryPlanner prompt small so the model only decides *which* tables to query;
+        full column details are fetched later in analytical_query_agent via get_schema().
+        """
+        all_tables = self.list_tables()
+        safe_sources = (
+            {PostgresqlRepository._safe_table_name(s) for s in available_sources}
+            if available_sources is not None else None
+        )
+        filtered = (
+            [
+                t for t in all_tables
+                if t in safe_sources
+                or any(t.startswith(s + '_table') for s in safe_sources)
+            ]
+            if safe_sources is not None
+            else all_tables
+        )
+        lines = []
+        for table in filtered:
+            try:
+                count = self._count_rows(table)
+                lines.append(f"{table} [{count} rows]")
+            except Exception:
+                lines.append(table)
         return "\n".join(lines)
 
     def run_select(self, sql: str) -> pd.DataFrame:
@@ -186,4 +223,4 @@ class PostgresqlRepository:
     @staticmethod
     def _safe_table_name(name: str) -> str:
         """Sanitize a source name to a safe PostgreSQL table name."""
-        return re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        return re.sub(r'[^a-zA-Z0-9_]', '_', name).lower()

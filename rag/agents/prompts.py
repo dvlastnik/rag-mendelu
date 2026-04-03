@@ -8,7 +8,7 @@ class Prompts:
             AVAILABLE SOURCES in the database: [{sources_list}]
             If the user mentions a source by name (or a close variant), set detected_source to the matching source name from the list above."""
 
-            return f"""You are a strict Classification Bot.
+        return f"""You are a strict Classification Bot.
             You must classify the user query into one of four types: 'rag', 'exhaustive', 'summarization', or 'general'.
 
             DEFINITIONS:
@@ -181,20 +181,25 @@ class Prompts:
 
     @staticmethod
     def get_query_planner_prompt(
-        compact_catalog: str,
+        table_names_catalog: str,
         available_sources: list[str],
     ) -> str:
         catalog_block = ""
-        if compact_catalog:
+        if table_names_catalog:
             catalog_block = f"""
-SQL-QUERYABLE TABLES (PostgreSQL):
-{compact_catalog}
+SQL-QUERYABLE TABLES (PostgreSQL) — table names and row counts:
+{table_names_catalog}
 
 Use strategy 'sql' when the question requires aggregation or filtering on these tables:
   keywords: highest, lowest, maximum, minimum, max, min, rank, top N, bottom N,
             average, count, how many, filter by, where, greater than, less than,
             sort by, order by, all rows where, list all X with condition.
 Use strategy 'hybrid' when the question needs both SQL filtering AND semantic/narrative context.
+For 'sql' and 'hybrid': set sql_sources to exact table name(s) from the list above.
+IMPORTANT: Only set sql_sources if the question is clearly about data in those tables.
+           If no table is relevant, use strategy 'vector' with sql_sources=[].
+Tables extracted from PDF/DOCX/TXT/MD files are named {{source}}_table0, {{source}}_table1, etc.
+CSV/XLSX files are registered directly under their source name (no _table suffix).
 """
 
         scroll_block = ""
@@ -253,6 +258,8 @@ RULES:
 10. UNION ALL and ORDER BY: ORDER BY after a UNION ALL must use only column names that appear in all SELECT clauses (e.g. ORDER BY name). If you need a complex sort expression (CASE, subquery, etc.), include the sort key as a column in every SELECT and order by that column:
     SELECT *, 0 AS src FROM table_a WHERE ... UNION ALL SELECT *, 1 AS src FROM table_b WHERE ... ORDER BY src, name
     Never reference a specific source table inside ORDER BY after a UNION ALL.
+11. NEVER place newline characters (\n) inside SQL string literals. Every string value must be written on a single line. Do not use multi-line strings inside quotes.
+12. ONLY use columns that appear in the TABLE SCHEMA above. Do NOT invent column names. If the requested attribute is not available as a dedicated column, search for it with ILIKE on the most appropriate text column (e.g. name or summary). Never reference columns that are not in the schema.
 
 EXAMPLES (tie-safe extremum queries):
 Q: "What is the highest rated game?" → SELECT name, review FROM games_2025 WHERE review = (SELECT MAX(review) FROM games_2025)

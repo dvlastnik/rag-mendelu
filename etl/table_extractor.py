@@ -191,15 +191,17 @@ class TableProcessor:
         text_without_tables = self.extractor.remove_tables_from_text(markdown_text, tables)
 
         row_documents = []
-        for table in tables:
+        for table_idx, table in enumerate(tables):
             for row_cells in table.rows:
                 row_col_meta: Dict = {}
                 for i, header in enumerate(table.headers):
                     key = header.lower().replace(' ', '_')
+                    if key and key[0].isdigit():
+                        key = 'col_' + key
                     raw = row_cells[i] if i < len(row_cells) else ''
                     row_col_meta[key] = self.extractor._infer_type(raw)
-            
-                row_meta = {**row_col_meta, **base_metadata, 'is_table': True}
+
+                row_meta = {**row_col_meta, **base_metadata, 'is_table': True, 'table_index': table_idx}
 
                 row_documents.append({
                     'text': '| ' + ' | '.join(row_cells) + ' |',

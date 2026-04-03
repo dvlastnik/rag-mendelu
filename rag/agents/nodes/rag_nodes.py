@@ -1,3 +1,4 @@
+import concurrent.futures
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -18,6 +19,18 @@ from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
+
+
+def _invoke_with_timeout(chain, messages: list, timeout_seconds: int = 60):
+    """Invoke an LLM chain with a wall-clock timeout.
+
+    Raises concurrent.futures.TimeoutError if the call does not complete
+    within timeout_seconds, regardless of streaming behaviour.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(chain.invoke, messages)
+        return future.result(timeout=timeout_seconds)
+
 
 class ModelParams():
     def __init__(self, top_n: int, chars_per_doc: int, listing_chars: int, max_iterations: int):
@@ -46,14 +59,17 @@ class RagNodes:
         sql_db_repo: PostgresqlRepository,
         context_window: int = 8192,
         available_sources: List[str] | None = None,
+        llm_structured: BaseChatModel | None = None,
     ):
         self.llm = llm
+        self.llm_structured = llm_structured if llm_structured is not None else llm
         self.db_repository = db_repository
         self.embedding_service = embedding_service
         self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir=str(Path.home() / '.cache' / 'flashrank'))
         self.sql_db_repo = sql_db_repo
         self.available_sources = available_sources or []
         self._compact_catalog = sql_db_repo.get_compact_catalog(available_sources=self.available_sources)
+        self._table_names_catalog = sql_db_repo.get_table_names_catalog(available_sources=self.available_sources)
 
         params = ModelParams.create_from_context_window(context_window)
         self.distiller_top_n = params.top_n
@@ -75,23 +91,19 @@ class RagNodes:
         else:
             user_input = f"Current question: {original_query}"
 
-        if not self.sql_db_repo or not self._compact_catalog:
+        if not self.sql_db_repo or not self._table_names_catalog:
             return self._decompose_vector_queries(user_input, original_query, detected_source, intent)
 
         try:
-            planner = self.llm.with_structured_output(QueryPlan)
+            planner = self.llm_structured.with_structured_output(QueryPlan)
 
-            prompt = Prompts.get_query_planner_prompt(
-                    self._compact_catalog,
+            plan = cast(QueryPlan, _invoke_with_timeout(planner, [
+                SystemMessage(Prompts.get_query_planner_prompt(
+                    self._table_names_catalog,
                     self.available_sources,
-                )
-            print(f"prompt for query planner: {prompt}")
-            plan = cast(QueryPlan, planner.invoke([
-                SystemMessage(prompt),
+                )),
                 HumanMessage(content=user_input),
-            ]))
-
-            print(f"plan: {plan}")
+            ], timeout_seconds=60))
 
             if intent in (Intent.RAG_SUMMARIZATION, Intent.RAG_EXHAUSTIVE) and detected_source and plan.strategy == QueryStrategy.VECTOR:
                 plan = QueryPlan(strategy=QueryStrategy.SCROLL)
@@ -107,6 +119,20 @@ class RagNodes:
                     plan = QueryPlan(strategy=QueryStrategy.VECTOR, vector_queries=plan.vector_queries)
                 elif valid_sources != plan.sql_sources:
                     plan = QueryPlan(strategy=plan.strategy, sql_sources=valid_sources, sql_hint=plan.sql_hint, vector_queries=plan.vector_queries)
+            elif plan.strategy in (QueryStrategy.SQL, QueryStrategy.HYBRID) and not plan.sql_sources:
+                logger.warning("QueryPlanner chose SQL/HYBRID but provided no sql_sources — downgrading to VECTOR")
+                plan = QueryPlan(strategy=QueryStrategy.VECTOR, vector_queries=plan.vector_queries or [original_query])
+
+            # HYBRID with no vector queries: generate them so research worker gets focused queries
+            if plan.strategy == QueryStrategy.HYBRID and not plan.vector_queries:
+                logger.info("HYBRID with no vector_queries — generating via fallback decomposer")
+                fallback = self._decompose_vector_queries(user_input, original_query, detected_source, intent)
+                plan = QueryPlan(
+                    strategy=plan.strategy,
+                    sql_sources=plan.sql_sources,
+                    sql_hint=plan.sql_hint,
+                    vector_queries=fallback["rewritten_queries"],
+                )
 
             logger.info(f"QueryPlan: strategy={plan.strategy}, sql_sources={plan.sql_sources}, queries={plan.vector_queries}")
             return {
@@ -127,11 +153,11 @@ class RagNodes:
     ) -> dict:
         """Fallback: generate vector search queries (old query_decomposer_agent logic)."""
         try:
-            rewriter = self.llm.with_structured_output(MultiQuery)
-            result = cast(MultiQuery, rewriter.invoke([
+            rewriter = self.llm_structured.with_structured_output(MultiQuery)
+            result = cast(MultiQuery, _invoke_with_timeout(rewriter, [
                 SystemMessage(content=Prompts.get_query_decomposer_agent_prompt()),
                 HumanMessage(content=user_input),
-            ]))
+            ], timeout_seconds=60))
             rephrasings = [q.strip() for q in result.queries if q.strip()][:4]
         except Exception as e:
             logger.warning(f"Multi-query generation failed ({e}), using original query only")
@@ -229,10 +255,11 @@ class RagNodes:
 
         try:
             generator = self.llm.with_structured_output(SQLQueryPlan)
-            sql_plan = cast(SQLQueryPlan, generator.invoke([
+            messages = [
                 SystemMessage(content=Prompts.get_sql_generator_prompt(combined_schema)),
                 HumanMessage(content=f"Question: {original_question}\nHint: {hint}"),
-            ]))
+            ]
+            sql_plan = cast(SQLQueryPlan, _invoke_with_timeout(generator, messages, timeout_seconds=60))
             logger.info(f"Generated SQL: {sql_plan.sql}")
 
             df = self.sql_db_repo.run_select(sql_plan.sql)
@@ -513,12 +540,18 @@ class RagNodes:
 
     @staticmethod
     def route_after_analytical(state: AgentState):
-        """After ANALYTICAL_QUERY: hybrid continues to vector search, sql goes straight to synthesizer."""
+        """After ANALYTICAL_QUERY: hybrid continues to vector search, sql goes straight to synthesizer.
+        If SQL errored (sql_result=None) or returned no rows (sql_result=''), fall back to vector search."""
         plan = state.get('query_plan')
         queries = state.get('rewritten_queries') or [state['messages'][-1].content]
+        sql_result = state.get('sql_result')
 
         if plan and plan.strategy == QueryStrategy.HYBRID:
             logger.info("route_after_analytical → RESEARCH_WORKER fan-out (hybrid)")
+            return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
+
+        if sql_result is None or sql_result == "":
+            logger.info("route_after_analytical → RESEARCH_WORKER (SQL failed/empty, falling back to vector)")
             return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
 
         logger.info("route_after_analytical → SYNTHESIZER (sql)")

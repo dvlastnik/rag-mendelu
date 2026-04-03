@@ -129,15 +129,19 @@ class GeneralEtl(BaseEtl):
                     ))
 
             if self.sql_db_repo is not None and table_documents:
-                _INTERNAL = {'is_table', 'source', 'file_type'}
-                rows = [
-                    {k: v for k, v in doc['metadata'].items() if k not in _INTERNAL}
-                    for doc in table_documents
-                ]
-                non_empty = [r for r in rows if r]
-                if non_empty:
-                    df = pd.DataFrame(non_empty)
-                    self.sql_db_repo.register_dataframe(self.file.stem, df)
+                from collections import defaultdict
+                _INTERNAL = {'is_table', 'source', 'file_type', 'table_index'}
+                by_table: dict = defaultdict(list)
+                for doc in table_documents:
+                    idx = doc['metadata'].get('table_index', 0)
+                    row = {k: v for k, v in doc['metadata'].items() if k not in _INTERNAL}
+                    if row:
+                        by_table[idx].append(row)
+
+                for idx, rows in sorted(by_table.items()):
+                    df = pd.DataFrame(rows)
+                    table_name = f"{self.file.stem}_table{idx}"
+                    self.sql_db_repo.register_dataframe(table_name, df)
 
             print(f"    {len(self.documents)} chunks ready for embedding")
             logger.info(f"Transform complete: {len(self.documents)} documents from '{self.file.name}'")
