@@ -1,13 +1,13 @@
 import traceback
 from typing import List, Dict, Any, Set, Optional
 from qdrant_client import QdrantClient, models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from qdrant_client.http.exceptions import UnexpectedResponse
 import ast
 import difflib
 
-from database.base.MyDocument import MyDocument
-from database.base.DbOperationResult import DbOperationResult
-from database.base.BaseDbRepository import BaseDbRepository
+from database.base.my_document import MyDocument
+from database.base.db_operation_result import DbOperationResult
+from database.base.base_db_repository import BaseDbRepository
 from utils.logging_config import highlight_log
 
 # Fields to create payload indexes on (improves filter performance)
@@ -61,11 +61,14 @@ class QdrantDbRepository(BaseDbRepository):
         distance_str = self.metadata.get('distance', 'DOT').upper()
         self.distance = getattr(models.Distance, distance_str, models.Distance.DOT)
         
-        # Lazy-loaded metadata cache (populated on first access)
         self._valid_metadata_cache: Optional[Dict[str, List]] = None
         self._metadata_cache_dirty = True
         
         self.logger.info(f"QdrantRepository configured for collection '{collection_name}' with size {self.vector_size} and distance {self.distance}")
+        connect_result = self._connect()    
+        if not connect_result.success:
+            self.logger.error(f"Failed to connect to Qdrant: {connect_result.message}")
+            raise Exception(f"Failed to connect to Qdrant: {connect_result.message}")
 
     @property
     def valid_metadata(self) -> Dict[str, List]:
@@ -79,7 +82,7 @@ class QdrantDbRepository(BaseDbRepository):
         """Call after inserting new documents to refresh metadata cache."""
         self._metadata_cache_dirty = True
 
-    def connect(self) -> DbOperationResult:
+    def _connect(self) -> DbOperationResult:
         """Connects to the Qdrant client and verifies connection."""
         try:
             self.logger.info(f'Connecting to Qdrant at {self.ip}:{self.port}...')
@@ -91,7 +94,7 @@ class QdrantDbRepository(BaseDbRepository):
                 timeout=30
             )
             
-            # Verify connection with a simple operation
+            # verify if client is ok
             collections = self.client.get_collections()
             self.logger.info(f'Qdrant connection successful. Found {len(collections.collections)} collections.')
             
@@ -135,13 +138,11 @@ class QdrantDbRepository(BaseDbRepository):
                         )
                     )
                 },
-                # Optimize for filtering
                 optimizers_config=models.OptimizersConfigDiff(
-                    indexing_threshold=10000,  # Start indexing after 10k points
+                    indexing_threshold=10000,
                 ),
             )
             
-            # Create payload indexes for filterable fields
             self._create_payload_indexes()
             
             self.logger.info('Collection created successfully with payload indexes.')
@@ -176,7 +177,6 @@ class QdrantDbRepository(BaseDbRepository):
                 )
                 self.logger.debug(f"Created index for field '{field_name}' ({field_type})")
             except Exception as e:
-                # Index might already exist
                 self.logger.debug(f"Could not create index for '{field_name}': {e}")
 
     def _build_qdrant_filter(
@@ -208,12 +208,8 @@ class QdrantDbRepository(BaseDbRepository):
             if value in [None, '', []]:
                 continue
             
-            # Normalize to list for consistent handling
             values = value if isinstance(value, list) else [value]
-            
             if key in array_fields:
-                # For array fields: check if ANY of the query values exist in the stored array
-                # E.g., content_years=[2021,2022,2023], query=2022 -> match
                 must_conditions.append(
                     models.FieldCondition(
                         key=key,
@@ -221,7 +217,6 @@ class QdrantDbRepository(BaseDbRepository):
                     )
                 )
             elif len(values) > 1:
-                # Multiple values for non-array field: match any
                 must_conditions.append(
                     models.FieldCondition(
                         key=key,
@@ -229,7 +224,6 @@ class QdrantDbRepository(BaseDbRepository):
                     )
                 )
             else:
-                # Single value exact match
                 must_conditions.append(
                     models.FieldCondition(
                         key=key,
@@ -300,6 +294,23 @@ class QdrantDbRepository(BaseDbRepository):
                 result[field] = sorted(list(values), key=lambda x: str(x))
                 
         return result
+    
+    def _upsert(self, points: List, batch_size: int, skipped: int) -> DbOperationResult:
+        # batch insert for large document sets
+        for i in range(0, len(points), batch_size):
+            batch = points[i:i + batch_size]
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=batch,
+                wait=True
+            )
+            if len(points) > batch_size:
+                self.logger.debug(f"Inserted batch {i // batch_size + 1}/{(len(points) - 1) // batch_size + 1}")
+        
+        self.invalidate_metadata_cache()
+        
+        self.logger.info(f"Successfully inserted {len(points)} points.")
+        return DbOperationResult(success=True, data={'inserted': len(points), 'skipped': skipped})
 
     def search(
         self, 
@@ -515,6 +526,49 @@ class QdrantDbRepository(BaseDbRepository):
         
         return result
         
+    def scroll_all_by_source(self, source: str, limit: int = 500) -> List[MyDocument]:
+        """Fetches all documents from a given source, sorted by chunk_index, up to limit."""
+        if not self.client:
+            self.logger.error("Client not connected")
+            return []
+
+        source_filter = models.Filter(
+            must=[models.FieldCondition(key='source', match=models.MatchValue(value=source))]
+        )
+
+        all_docs = []
+        next_offset = None
+
+        while len(all_docs) < limit:
+            batch_limit = min(100, limit - len(all_docs))
+            records, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=source_filter,
+                with_payload=True,
+                with_vectors=False,
+                limit=batch_limit,
+                offset=next_offset,
+            )
+            for record in records:
+                payload = record.payload or {}
+                text = payload.get('text', '') or payload.get('parent_text', '')
+                metadata = {k: v for k, v in payload.items() if k != 'text'}
+                metadata['point_id'] = record.id
+                all_docs.append(MyDocument(
+                    id=str(record.id),
+                    text=text,
+                    embedding=[],
+                    metadata=metadata,
+                    score=0.0,
+                ))
+            if next_offset is None:
+                break
+
+        # Sort by chunk_index for natural reading order
+        all_docs.sort(key=lambda d: d.metadata.get('chunk_index', 0))
+        self.logger.info(f"scroll_all_by_source('{source}'): {len(all_docs)} documents")
+        return all_docs
+
     def get_all_filenames(self) -> List[str]:
         """
         Gets all source files that are ingested in current database.
@@ -581,7 +635,6 @@ class QdrantDbRepository(BaseDbRepository):
                     values=doc.sparse_embedding.values
                 )
             
-            # Ensure metadata includes text for retrieval
             payload = doc.metadata.copy() if doc.metadata else {}
             if 'text' not in payload and doc.text:
                 payload['text'] = doc.text
@@ -599,22 +652,11 @@ class QdrantDbRepository(BaseDbRepository):
         self.logger.info(f"Inserting {len(points)} points ({skipped} skipped)...")
             
         try:
-            # Batch insert for large document sets
-            for i in range(0, len(points), batch_size):
-                batch = points[i:i + batch_size]
-                self.client.upsert(
-                    collection_name=self.collection_name,
-                    points=batch,
-                    wait=True
-                )
-                if len(points) > batch_size:
-                    self.logger.debug(f"Inserted batch {i // batch_size + 1}/{(len(points) - 1) // batch_size + 1}")
-            
-            # Invalidate metadata cache since we added new documents
-            self.invalidate_metadata_cache()
-            
-            self.logger.info(f"Successfully inserted {len(points)} points.")
-            return DbOperationResult(success=True, data={'inserted': len(points), 'skipped': skipped})
+            return self._upsert(points, batch_size, skipped)
+        except UnexpectedResponse:
+            self.logger.warning(f"Collection '{self.collection_name}' was not created, creating...")
+            self.create_collection()
+            return self._upsert(points, batch_size, skipped)
         except Exception as e:
             self.logger.error(f"Failed to insert points: {e}")
             traceback.print_exc()

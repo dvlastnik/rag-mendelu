@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, List, Callable, Any
 
-from database.base.MyDocument import MyDocument
+from database.base.my_document import MyDocument
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)

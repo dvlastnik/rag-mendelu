@@ -26,5 +26,14 @@ def mock_embedding():
     return service
 
 @pytest.fixture
-def rag_nodes(mock_llm, mock_db, mock_embedding):
-    return RagNodes(mock_llm, mock_db, mock_embedding)
+def mock_sql_db():
+    repo = MagicMock()
+    repo.get_compact_catalog.return_value = "games_2025(name:varchar, review:double) [20 rows]"
+    repo.list_tables.return_value = ["games_2025"]
+    repo.get_schema.return_value = "Table: games_2025\n\nColumns:\n name  varchar\nreview   double\n\nSample rows:\n name  review\n Game1     9.4"
+    repo.run_select.return_value = MagicMock(empty=False, to_string=lambda index: "name  review\nGame1    9.4")
+    return repo
+
+@pytest.fixture
+def rag_nodes(mock_llm, mock_db, mock_embedding, mock_sql_db):
+    return RagNodes(mock_llm, mock_db, mock_embedding, duck_db_repo=mock_sql_db)

@@ -3,23 +3,53 @@ networks:
     driver: bridge
 
 services:
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant
     ports:
       - "${QDRANT_GRPC_PORT:-6334}:6334"
       - "${QDRANT_REST_PORT:-6333}:6333"
-    networks:
-      - net
+    networks: [net]
     volumes:
       - ./qdrant_config.yaml:/qdrant/config/config.yaml:ro
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6334/readyz"]
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks: [net]
+    volumes:
+      - app_data:/app/data/general
+      - duckdb_data:/app/data/sql
+      - ./data/input:/app/data/input:ro
+      - model_cache:/root/.cache
+      - ./logs:/app/logs
+    environment:
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: "6333"
+      OLLAMA_HOST: "http://host.docker.internal:11434"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-ministral-3:8b}"
+      COLLECTION_NAME: "${COLLECTION_NAME:-default_name}"
+      VECTOR_DB_DISTANCE: "${VECTOR_DB_DISTANCE:-DOT}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      FASTEMBED_CACHE_PATH: /root/.cache/fastembed
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    profiles: [app]
+
 volumes:
   qdrant_data:
+  app_data:
+  duckdb_data:
+  model_cache:

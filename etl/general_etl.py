@@ -2,19 +2,20 @@ import re
 import traceback
 import pathlib
 from typing import List, Dict, Optional
-
 import pandas as pd
-
+from tqdm import tqdm
 from langchain_core.documents import Document
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter
 
-from etl.BaseEtl import BaseEtl, ETLState
+from etl.base_etl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
-from database.base.MyDocument import MyDocument, SparseVector
+from database.base.my_document import MyDocument, SparseVector
+from database.base.base_db_repository import BaseDbRepository
+from database.duck_db_repository import DuckDbRepository
+from text_embedding.text_embedding_service import TextEmbeddingService
 from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
 from semantic_chunking.similiar_sentence_splitter import SimilarSentenceSplitter
-from utils.utils import Utils
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -28,7 +29,6 @@ _RE_SINGLE_NEWLINE = re.compile(r'(?<!\n)\n(?!\n)')
 _RE_MULTI_NEWLINE = re.compile(r'\n{3,}')
 _RE_MULTI_SPACE = re.compile(r'[ \t]+')
 
-# markdown syntax
 _RE_MD_BOLD = re.compile(r'\*\*(.+?)\*\*|__(.+?)__', re.DOTALL)
 _RE_MD_ITALIC = re.compile(r'\*(.+?)\*', re.DOTALL)
 _RE_MD_CODE = re.compile(r'`(.+?)`', re.DOTALL)
@@ -54,20 +54,13 @@ class GeneralEtl(BaseEtl):
     def __init__(
         self,
         filepath: str,
-        db_repositories: Dict,
-        embedding_service,
-        use_semantic: bool = True,
+        db_repository: BaseDbRepository,
+        embedding_service: TextEmbeddingService,
+        sql_db_repo: DuckDbRepository
     ) -> None:
-        super().__init__(filepath, db_repositories, embedding_service)
-        self.use_semantic = use_semantic
+        super().__init__(filepath, db_repository, embedding_service)
+        self.sql_db_repo = sql_db_repo
         self.table_processor = TableProcessor()
-
-        self.splitter = RecursiveCharacterTextSplitter(
-            chunk_size=768,
-            chunk_overlap=200,
-            length_function=len,
-            separators=["\n\n", "\n", ". ", " ", ""],
-        )
 
         sentence_similarity = SentenceSimilarity(embedding_service=embedding_service)
         self.semantic_splitter = SimilarSentenceSplitter(similarity_model=sentence_similarity)
@@ -105,7 +98,7 @@ class GeneralEtl(BaseEtl):
             total = len(split_docs)
             logger.info(f"Processing {total} sections from '{self.file.name}'...")
 
-            for i, doc in enumerate(split_docs, 1):
+            for i, doc in enumerate(tqdm(split_docs, desc=f"  {self.file.name}", unit="section", leave=False), 1):
                 cleaned = self._clean_text(doc.page_content)
                 if not cleaned:
                     continue
@@ -136,6 +129,32 @@ class GeneralEtl(BaseEtl):
                         metadata=table_meta,
                     ))
 
+            if self.sql_db_repo is not None and table_documents:
+                from collections import defaultdict
+                _INTERNAL = {'is_table', 'source', 'file_type', 'table_index'}
+                by_table: dict = defaultdict(list)
+                for doc in table_documents:
+                    idx = doc['metadata'].get('table_index', 0)
+                    row = {k: v for k, v in doc['metadata'].items() if k not in _INTERNAL}
+                    if row:
+                        by_table[idx].append(row)
+
+                for idx, rows in sorted(by_table.items()):
+                    if not rows:
+                        continue
+                    sample_keys = list(rows[0].keys())
+                    bad = sum(1 for k in sample_keys if len(k) <= 1)
+                    if sample_keys and bad / len(sample_keys) > 0.6:
+                        logger.warning(
+                            f"Skipping DuckDB registration for '{self.file.stem}_table{idx}': "
+                            f"{bad}/{len(sample_keys)} column keys are empty/single-char after sanitization."
+                        )
+                        continue
+                    df = pd.DataFrame(rows)
+                    table_name = f"{self.file.stem}_table{idx}"
+                    self.sql_db_repo.register_dataframe(table_name, df)
+
+            print(f"    {len(self.documents)} chunks ready for embedding")
             logger.info(f"Transform complete: {len(self.documents)} documents from '{self.file.name}'")
             self.state = ETLState.TRANSFORMED
 
@@ -178,7 +197,7 @@ class GeneralEtl(BaseEtl):
         texts: List[str] = []
         row_metadatas: List[Dict] = []
 
-        for row_index, row in self.df.iterrows():
+        for row_index, row in tqdm(self.df.iterrows(), total=len(self.df), desc=f"  {self.file.name}", unit="row", leave=False):
             parts: List[str] = []
             row_meta: Dict = {}
 
@@ -199,8 +218,8 @@ class GeneralEtl(BaseEtl):
             text = " | ".join(parts)
             texts.append(text)
             row_metadatas.append({
-                **base_metadata,
                 **row_meta,
+                **base_metadata,
                 'row_index': int(row_index),
                 'text': text,
             })
@@ -231,6 +250,13 @@ class GeneralEtl(BaseEtl):
 
         logger.info(f"Tabular transform complete: {len(self.documents)} documents from '{self.file.name}'")
 
+        if self.sql_db_repo is not None:
+            suffix = self.file.suffix.lower()
+            if suffix == '.csv':
+                self.sql_db_repo.register_csv(self.file.stem, str(self.file.resolve()))
+            elif suffix == '.xlsx':
+                self.sql_db_repo.register_xlsx(self.file.stem, str(self.file.resolve()))
+
     @staticmethod
     def _coerce_value(val) -> int | float | bool | str:
         """Convert a pandas cell value to a JSON-serialisable Python primitive."""
@@ -239,7 +265,6 @@ class GeneralEtl(BaseEtl):
         if isinstance(val, (int,)):
             return int(val)
         if isinstance(val, float):
-            # Store whole-number floats as int for cleaner metadata (e.g. 9.0 → 9)
             return int(val) if val == int(val) else float(val)
         return str(val)
 
@@ -269,7 +294,6 @@ class GeneralEtl(BaseEtl):
 
     def _clean_text(self, text: str) -> str:
         """Generic text cleaning — strips markdown syntax and normalises whitespace."""
-        # Strip markdown formatting (order matters: bold before italic)
         text = _RE_MD_HRULE.sub('', text)
         text = _RE_MD_BLOCKQUOTE.sub('', text)
         text = _RE_MD_LINK.sub(r'\1', text)
@@ -277,7 +301,6 @@ class GeneralEtl(BaseEtl):
         text = _RE_MD_BOLD.sub(lambda m: m.group(1) or m.group(2), text)
         text = _RE_MD_ITALIC.sub(r'\1', text)
 
-        # General cleanup
         text = _RE_HTML_COMMENT.sub('', text)
         text = text.replace('\x00', '').replace('\xa0', ' ')
         text = _RE_HYPHENATION.sub(r'\1\2', text)
@@ -290,10 +313,7 @@ class GeneralEtl(BaseEtl):
     def _process_section(self, text: str, metadata: Dict) -> List[MyDocument]:
         """Chunk a section and embed each chunk into a MyDocument."""
         try:
-            if self.use_semantic:
-                raw_chunks = self.semantic_splitter.split_text(text)
-            else:
-                raw_chunks = self.splitter.split_text(text)
+            raw_chunks = self.semantic_splitter.split_text(text)
 
             valid_chunks = [
                 c.strip() for c in (raw_chunks or [])
