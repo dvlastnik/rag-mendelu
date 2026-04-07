@@ -8,6 +8,7 @@ from etl.etl_state import ETLState
 from utils.utils import Utils
 from utils.logging_config import get_logger, highlight_log
 from etl.converters import convert_data
+from database.base.base_db_repository import BaseDbRepository
 from text_embedding import TextEmbeddingService
 from database.base.my_document import MyDocument
 from utils.utils import Utils
@@ -18,12 +19,12 @@ logger = get_logger(__name__)
 class BaseEtl(ABC):
     OUTPUT_FOLDER: str = "data"
 
-    def __init__(self, filepath: str, db_repositories: Dict[str, BaseDbRepository], embedding_service: TextEmbeddingService):
+    def __init__(self, filepath: str, db_repository: BaseDbRepository, embedding_service: TextEmbeddingService):
         super().__init__()
         self.documents: List[MyDocument] = []
         # dataframe for csv and xlsx
         self.df = None
-        self.db_repositories = db_repositories
+        self.db_repository = db_repository
         self.embedding_service = embedding_service
         self.file = pathlib.Path(filepath)
 
@@ -32,25 +33,23 @@ class BaseEtl(ABC):
     def _insert_by_chunks(self, chunk_size: int = 500) -> ETLState:
         logger.info(f"Inserting documents of lenght: {len(self.documents)}, chunk_size = {chunk_size}")
         for i, doc in enumerate(Utils.chunks(self.documents, chunk_size)):
-            for _, repository in self.db_repositories.items():
-                result = repository.insert(doc)
-                if not result.success:
-                    logger.error(result.message)
-                    return ETLState.FAILED
-                else:
-                    index = i+1
-                    logger.info(f"{index}. chunk inserted ({repository.name})")
+            result = self.db_repository.insert(doc)
+            if not result.success:
+                logger.error(result.message)
+                return ETLState.FAILED
+            else:
+                index = i+1
+                logger.info(f"{index}. chunk inserted ({self.db_repository.name})")
 
         return ETLState.LOADED
 
     def _check_if_data_are_loaded(self) -> ETLState:
-        for _, repository in self.db_repositories.items():
-            check_db_data = repository.check_if_data_were_inserted()
-            if not check_db_data.success:
-                logger.error(check_db_data.message)
-                return ETLState.FAILED
+        check_db_data = self.db_repository.check_if_data_were_inserted()
+        if not check_db_data.success:
+            logger.error(check_db_data.message)
+            return ETLState.FAILED
 
-            logger.info(f"Rows in database after loading: {self.file.stem} is {repository.get_count()}")
+        logger.info(f"Rows in database after loading: {self.file.stem} is {self.db_repository.get_count()}")
         return ETLState.LOADED
 
     @abstractmethod

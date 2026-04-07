@@ -10,7 +10,7 @@ from rag.agents.nodes.general_nodes import GeneralNodes
 from rag.agents.nodes.rag_nodes import RagNodes
 
 from database.base.base_db_repository import BaseDbRepository
-from database.postgresql_repository import PostgresqlRepository
+from database.duck_db_repository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
@@ -33,8 +33,8 @@ def _context_window_from_model(model_name: str) -> int:
 
 def build_graph(
     database_service: BaseDbRepository,
-    sql_db_repo: PostgresqlRepository,
     embedding_service: TextEmbeddingService,
+    duck_db_repo: DuckDbRepository,
     model_name: str = "ministral-3:8b",
 ):
     context_window = _context_window_from_model(model_name)
@@ -58,16 +58,16 @@ def build_graph(
         keep_alive='5m',
         repeat_penalty=1.0,
         timeout=120,
-        num_predict=512,
+        num_predict=400,
     )
 
     available_sources = database_service.get_all_filenames()
-    router_nodes = GeneralNodes(llm, available_sources=available_sources)
+    router_nodes = GeneralNodes(llm=llm, available_sources=available_sources)
     rag_nodes = RagNodes(
-        llm,
-        database_service,
-        embedding_service,
-        sql_db_repo=sql_db_repo,
+        llm=llm,
+        db_repository=database_service,
+        embedding_service=embedding_service,
+        duck_db_repo=duck_db_repo,
         context_window=context_window,
         available_sources=available_sources,
         llm_structured=llm_structured,

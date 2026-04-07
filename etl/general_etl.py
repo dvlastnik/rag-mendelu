@@ -4,12 +4,13 @@ import pathlib
 from typing import List, Dict, Optional
 import pandas as pd
 from langchain_core.documents import Document
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 from etl.base_etl import BaseEtl, ETLState
 from etl.table_extractor import TableProcessor
 from database.base.my_document import MyDocument, SparseVector
-from database.postgresql_repository import PostgresqlRepository
+from database.base.base_db_repository import BaseDbRepository
+from database.duck_db_repository import DuckDbRepository
 from text_embedding.text_embedding_service import TextEmbeddingService
 from text_embedding import EmbeddingResponse
 from semantic_chunking.sentence_similarity import SentenceSimilarity
@@ -52,11 +53,11 @@ class GeneralEtl(BaseEtl):
     def __init__(
         self,
         filepath: str,
-        db_repositories: Dict,
+        db_repository: BaseDbRepository,
         embedding_service: TextEmbeddingService,
-        sql_db_repo: PostgresqlRepository
+        sql_db_repo: DuckDbRepository
     ) -> None:
-        super().__init__(filepath, db_repositories, embedding_service)
+        super().__init__(filepath, db_repository, embedding_service)
         self.sql_db_repo = sql_db_repo
         self.table_processor = TableProcessor()
 
@@ -139,6 +140,16 @@ class GeneralEtl(BaseEtl):
                         by_table[idx].append(row)
 
                 for idx, rows in sorted(by_table.items()):
+                    if not rows:
+                        continue
+                    sample_keys = list(rows[0].keys())
+                    bad = sum(1 for k in sample_keys if len(k) <= 1)
+                    if sample_keys and bad / len(sample_keys) > 0.6:
+                        logger.warning(
+                            f"Skipping DuckDB registration for '{self.file.stem}_table{idx}': "
+                            f"{bad}/{len(sample_keys)} column keys are empty/single-char after sanitization."
+                        )
+                        continue
                     df = pd.DataFrame(rows)
                     table_name = f"{self.file.stem}_table{idx}"
                     self.sql_db_repo.register_dataframe(table_name, df)

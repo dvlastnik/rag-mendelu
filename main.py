@@ -8,7 +8,7 @@ from pathlib import Path
 
 from database.qdrant_db_repository import QdrantDbRepository
 from database.base.base_db_repository import BaseDbRepository
-from database.postgresql_repository import PostgresqlRepository
+from database.duck_db_repository import DuckDbRepository
 from etl.general_etl import GeneralEtl
 from text_embedding import TextEmbeddingService
 from rag.agentic_rag import AgenticRAG
@@ -27,7 +27,7 @@ def run_etl_general(
         embedding_service: TextEmbeddingService,
         db_repository: BaseDbRepository,
         collection_name: str,
-        sql_db=None,
+        sql_db: DuckDbRepository,
     ):
     """Runs the general ETL pipeline on any supported file type."""
     highlight_log(logger, "Starting General ETL pipeline...")
@@ -48,7 +48,7 @@ def run_etl_general(
     else:
         files = [str(path_obj)]
 
-    if delete_collection and sql_db is not None:
+    if delete_collection:
         for file in files:
             sql_db.drop_table(Path(file).stem)
 
@@ -67,7 +67,7 @@ def run_etl_general(
 
         obj = GeneralEtl(
             filepath=file,
-            db_repositories={'qdrant': db_repository},
+            db_repository=db_repository,
             embedding_service=embedding_service,
             sql_db_repo=sql_db,
         )
@@ -293,13 +293,7 @@ def main():
         }
     )
 
-    sql_db = PostgresqlRepository(
-        host=os.environ.get("POSTGRES_HOST", "localhost"),
-        port=int(os.environ.get("POSTGRES_PORT", "5432")),
-        db=os.environ.get("POSTGRES_DB", "rag_mendelu"),
-        user=os.environ.get("POSTGRES_USER", "rag"),
-        password=os.environ.get("POSTGRES_PASSWORD", "rag_password"),
-    )
+    sql_db = DuckDbRepository()
 
     if args.run_etl:
         run_etl_general(
@@ -308,7 +302,7 @@ def main():
             embedding_service=embedding_service,
             db_repository=db_repository,
             collection_name=collection_name,
-            sql_db=sql_db,
+            sql_db=sql_db
         )
     elif args.check_dbs:
         check_databases(db_repository)

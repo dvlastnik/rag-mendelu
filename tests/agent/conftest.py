@@ -36,4 +36,4 @@ def mock_sql_db():
 
 @pytest.fixture
 def rag_nodes(mock_llm, mock_db, mock_embedding, mock_sql_db):
-    return RagNodes(mock_llm, mock_db, mock_embedding, sql_db_repo=mock_sql_db)
+    return RagNodes(mock_llm, mock_db, mock_embedding, duck_db_repo=mock_sql_db)

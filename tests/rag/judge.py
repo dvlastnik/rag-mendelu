@@ -4,10 +4,11 @@ from langchain.chat_models import init_chat_model
 class Judgement(BaseModel):
     relevancy_score: int = Field(description="Score 1-5. How well does the answer address the user's question?")
     faithfulness_score: int = Field(description="Score 1-5. Is the answer fully supported by the Retrieved Context?")
+    hallucination_type: str = Field(description="One of: 'none', 'minor_paraphrase', 'minor_entity_error', 'major_fabrication', 'refusal'")
     reasoning: str = Field(description="Concise explanation for the scores.")
 
 class Judge:
-    def __init__(self, model_name="ministral-3:8b"):
+    def __init__(self, model_name="llama3.1:8b"):
         self.llm = init_chat_model(
             model=model_name,
             model_provider='ollama', 
@@ -40,7 +41,14 @@ class Judge:
            - 5 = Every fact in the answer is found in the RETRIEVED CONTEXT.
            - 1 = Answer contains hallucinations or info not in context.
 
-        Provide a concise reasoning (2-3 sentences) and assign both scores.
+        3. HALLUCINATION_TYPE (choose exactly one):
+           - "none": Answer sticks to retrieved facts; no invented content.
+           - "minor_paraphrase": Rewording but meaning preserved; entity names correct.
+           - "minor_entity_error": Proper noun slightly wrong (e.g. game title renamed, person name misspelled).
+           - "major_fabrication": Invented facts, events, or entities not present anywhere in context.
+           - "refusal": Answer refuses to answer despite relevant context being present in RETRIEVED CONTEXT.
+
+        Provide a concise reasoning (2-3 sentences) and assign all three scores.
         """
 
         return self.structured_llm.invoke(prompt)

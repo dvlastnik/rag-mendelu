@@ -194,10 +194,20 @@ class TableProcessor:
         for table_idx, table in enumerate(tables):
             for row_cells in table.rows:
                 row_col_meta: Dict = {}
+                seen_keys: set = set()
                 for i, header in enumerate(table.headers):
-                    key = header.lower().replace(' ', '_')
-                    if key and key[0].isdigit():
-                        key = 'col_' + key
+                    key = re.sub(r'[^a-z0-9]', '_', header.lower())
+                    key = re.sub(r'_+', '_', key).strip('_')
+                    if not key or key[0].isdigit():
+                        key = f'col_{i}'
+                    if key in seen_keys:
+                        candidate = f'{key}_{i}'
+                        j = i
+                        while candidate in seen_keys:
+                            j += 1
+                            candidate = f'{key}_{j}'
+                        key = candidate
+                    seen_keys.add(key)
                     raw = row_cells[i] if i < len(row_cells) else ''
                     row_col_meta[key] = self.extractor._infer_type(raw)
 

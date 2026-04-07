@@ -56,11 +56,12 @@ def pytest_sessionstart(session):
     
     base_dir = get_results_filepath(model_name, questions_file)
     results_file = Path(base_dir) / "answers.json"
-    
+    os.makedirs(base_dir, exist_ok=True)
+    log_file = Path(base_dir) / "run.log"
+    setup_logging(log_file=log_file)
+
     if force_regen or not results_file.exists():
         print(f"\n🔄 [SessionStart] Generating answers for {model_name}...")
-        os.makedirs(base_dir, exist_ok=True)
-        
         generate_answers_file(model_name, questions_file, collection_name)
         print("✅ [SessionStart] Generation Complete.\n")
     else:

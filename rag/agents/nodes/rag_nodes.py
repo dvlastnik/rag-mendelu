@@ -1,4 +1,3 @@
-import concurrent.futures
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -14,23 +13,11 @@ from rag.agents.models import MultiQuery, GradeHallucinations, CompletenessCheck
 from rag.agents.enums import NodeName, Intent
 from rag.agents.prompts import Prompts
 from database.base.base_db_repository import BaseDbRepository
-from database.postgresql_repository import PostgresqlRepository
+from database.duck_db_repository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
-
-
-def _invoke_with_timeout(chain, messages: list, timeout_seconds: int = 60):
-    """Invoke an LLM chain with a wall-clock timeout.
-
-    Raises concurrent.futures.TimeoutError if the call does not complete
-    within timeout_seconds, regardless of streaming behaviour.
-    """
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(chain.invoke, messages)
-        return future.result(timeout=timeout_seconds)
-
 
 class ModelParams():
     def __init__(self, top_n: int, chars_per_doc: int, listing_chars: int, max_iterations: int):
@@ -44,7 +31,7 @@ class ModelParams():
         if context_window <= 4096:
             return ModelParams(5, 1200, 200, 2)
         elif context_window <= 8192:
-            return ModelParams(10, 2000, 500, 3)
+            return ModelParams(15, 1500, 500, 3)
         elif context_window <= 32768:
             return ModelParams(15, 3000, 800, 3)
         else:
@@ -56,20 +43,19 @@ class RagNodes:
         llm: BaseChatModel,
         db_repository: BaseDbRepository,
         embedding_service: TextEmbeddingService,
-        sql_db_repo: PostgresqlRepository,
+        duck_db_repo: DuckDbRepository,
         context_window: int = 8192,
         available_sources: List[str] | None = None,
         llm_structured: BaseChatModel | None = None,
     ):
         self.llm = llm
-        self.llm_structured = llm_structured if llm_structured is not None else llm
+        self.llm_structured = llm_structured or llm
         self.db_repository = db_repository
         self.embedding_service = embedding_service
         self.reranker = Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir=str(Path.home() / '.cache' / 'flashrank'))
-        self.sql_db_repo = sql_db_repo
+        self.duck_db_repo = duck_db_repo
         self.available_sources = available_sources or []
-        self._compact_catalog = sql_db_repo.get_compact_catalog(available_sources=self.available_sources)
-        self._table_names_catalog = sql_db_repo.get_table_names_catalog(available_sources=self.available_sources)
+        self._compact_catalog = duck_db_repo.get_compact_catalog(available_sources=self.available_sources)
 
         params = ModelParams.create_from_context_window(context_window)
         self.distiller_top_n = params.top_n
@@ -91,25 +77,32 @@ class RagNodes:
         else:
             user_input = f"Current question: {original_query}"
 
-        if not self.sql_db_repo or not self._table_names_catalog:
+        if not self.duck_db_repo or not self._compact_catalog:
             return self._decompose_vector_queries(user_input, original_query, detected_source, intent)
 
         try:
             planner = self.llm_structured.with_structured_output(QueryPlan)
-
-            plan = cast(QueryPlan, _invoke_with_timeout(planner, [
-                SystemMessage(Prompts.get_query_planner_prompt(
-                    self._table_names_catalog,
+            plan = cast(QueryPlan, planner.invoke([
+                SystemMessage(content=Prompts.get_query_planner_prompt(
+                    self._compact_catalog,
                     self.available_sources,
                 )),
                 HumanMessage(content=user_input),
-            ], timeout_seconds=60))
+            ]))
 
+            # Only force SCROLL for single-source exhaustive/summarization intents.
+            # Guard: skip if the planner produced vector_queries that span topics beyond
+            # the detected source — that signals a multi-part question where forcing SCROLL
+            # would silently drop all sub-questions not about detected_source.
             if intent in (Intent.RAG_SUMMARIZATION, Intent.RAG_EXHAUSTIVE) and detected_source and plan.strategy == QueryStrategy.VECTOR:
-                plan = QueryPlan(strategy=QueryStrategy.SCROLL)
+                queries = plan.vector_queries or []
+                source_lower = detected_source.lower().replace('_', ' ')
+                all_on_source = all(source_lower in q.lower() or detected_source.lower() in q.lower() for q in queries)
+                if not queries or all_on_source:
+                    plan = QueryPlan(strategy=QueryStrategy.SCROLL)
 
             if plan.strategy in (QueryStrategy.SQL, QueryStrategy.HYBRID) and plan.sql_sources:
-                known_tables = self.sql_db_repo.list_tables()
+                known_tables = self.duck_db_repo.list_tables()
                 valid_sources = [t for t in plan.sql_sources if t in known_tables]
                 unknown = [t for t in plan.sql_sources if t not in known_tables]
                 if unknown:
@@ -119,19 +112,28 @@ class RagNodes:
                     plan = QueryPlan(strategy=QueryStrategy.VECTOR, vector_queries=plan.vector_queries)
                 elif valid_sources != plan.sql_sources:
                     plan = QueryPlan(strategy=plan.strategy, sql_sources=valid_sources, sql_hint=plan.sql_hint, vector_queries=plan.vector_queries)
-            elif plan.strategy in (QueryStrategy.SQL, QueryStrategy.HYBRID) and not plan.sql_sources:
-                logger.warning("QueryPlanner chose SQL/HYBRID but provided no sql_sources — downgrading to VECTOR")
-                plan = QueryPlan(strategy=QueryStrategy.VECTOR, vector_queries=plan.vector_queries or [original_query])
 
-            # HYBRID with no vector queries: generate them so research worker gets focused queries
+            # Guard: HYBRID must always have vector_queries.
+            # Small models reliably omit them for cross-domain compound questions
+            # (e.g. SQL on games_2025 + vector into history_of_metal).
+            # Fall back to the query decomposer rather than silently using the raw question.
             if plan.strategy == QueryStrategy.HYBRID and not plan.vector_queries:
-                logger.info("HYBRID with no vector_queries — generating via fallback decomposer")
-                fallback = self._decompose_vector_queries(user_input, original_query, detected_source, intent)
+                logger.warning("HYBRID plan missing vector_queries — generating via decomposer fallback")
+                try:
+                    rewriter = self.llm_structured.with_structured_output(MultiQuery)
+                    result = cast(MultiQuery, rewriter.invoke([
+                        SystemMessage(content=Prompts.get_query_decomposer_agent_prompt()),
+                        HumanMessage(content=user_input),
+                    ]))
+                    queries = [q.strip() for q in result.queries if q.strip()][:4]
+                except Exception as e:
+                    logger.warning(f"Decomposer fallback failed ({e}), using original query")
+                    queries = []
                 plan = QueryPlan(
-                    strategy=plan.strategy,
+                    strategy=QueryStrategy.HYBRID,
                     sql_sources=plan.sql_sources,
                     sql_hint=plan.sql_hint,
-                    vector_queries=fallback["rewritten_queries"],
+                    vector_queries=queries or [original_query],
                 )
 
             logger.info(f"QueryPlan: strategy={plan.strategy}, sql_sources={plan.sql_sources}, queries={plan.vector_queries}")
@@ -154,10 +156,10 @@ class RagNodes:
         """Fallback: generate vector search queries (old query_decomposer_agent logic)."""
         try:
             rewriter = self.llm_structured.with_structured_output(MultiQuery)
-            result = cast(MultiQuery, _invoke_with_timeout(rewriter, [
+            result = cast(MultiQuery, rewriter.invoke([
                 SystemMessage(content=Prompts.get_query_decomposer_agent_prompt()),
                 HumanMessage(content=user_input),
-            ], timeout_seconds=60))
+            ]))
             rephrasings = [q.strip() for q in result.queries if q.strip()][:4]
         except Exception as e:
             logger.warning(f"Multi-query generation failed ({e}), using original query only")
@@ -238,31 +240,31 @@ class RagNodes:
         return {'filtered_results': sorted_docs, 'search_results': docs}
 
     def analytical_query_agent(self, state: AgentState):
-        """Execute a SQL query on PostgreSQL and store the result as a distilled fact."""
-        logger.info("--- ANALYTICAL QUERY (PostgreSQL) ---")
+        """Execute a SQL query on DuckDB and store the result as a distilled fact."""
+        logger.info("--- ANALYTICAL QUERY (DuckDB) ---")
         plan = state.get('query_plan')
         original_question = state['messages'][-1].content
 
-        if not plan or not plan.sql_sources or not self.sql_db_repo:
-            logger.error("analytical_query_agent called without sql_sources or sql_db_repo — returning empty")
+        if not plan or not plan.sql_sources or not self.duck_db_repo:
+            logger.error("analytical_query_agent called without sql_sources or duck_db_repo — returning empty")
             return {"distilled_facts": [], "sql_result": None}
 
         sources_label = ", ".join(plan.sql_sources)
         combined_schema = "\n\n---\n\n".join(
-            self.sql_db_repo.get_schema(t) for t in plan.sql_sources
+            self.duck_db_repo.get_schema(t) for t in plan.sql_sources
         )
         hint = plan.sql_hint or original_question
 
+        sql_plan = None
+        generator = self.llm_structured.with_structured_output(SQLQueryPlan)
         try:
-            generator = self.llm.with_structured_output(SQLQueryPlan)
-            messages = [
+            sql_plan = cast(SQLQueryPlan, generator.invoke([
                 SystemMessage(content=Prompts.get_sql_generator_prompt(combined_schema)),
                 HumanMessage(content=f"Question: {original_question}\nHint: {hint}"),
-            ]
-            sql_plan = cast(SQLQueryPlan, _invoke_with_timeout(generator, messages, timeout_seconds=60))
+            ]))
             logger.info(f"Generated SQL: {sql_plan.sql}")
 
-            df = self.sql_db_repo.run_select(sql_plan.sql)
+            df = self.duck_db_repo.run_select(sql_plan.sql)
             if df.empty:
                 logger.info("SQL returned no rows")
                 return {
@@ -271,16 +273,40 @@ class RagNodes:
                 }
 
             result_text = df.to_string(index=False)
-            fact = f"[{sources_label}] {sql_plan.explanation}\n{result_text}"
+            fact = f"[SQL Result]\n[{sources_label}] {sql_plan.explanation}\n{result_text}"
             logger.info(f"SQL result ({len(df)} rows):\n{result_text[:400]}")
             return {"distilled_facts": [fact], "sql_result": result_text}
 
         except Exception as e:
-            logger.error(f"analytical_query_agent failed: {e}")
-            return {
-                "distilled_facts": [f"[{sources_label}] SQL query could not be executed: {e}"],
-                "sql_result": None,
-            }
+            logger.warning(f"SQL attempt 1 failed: {e}, retrying with error context...")
+            failed_sql_hint = (
+                f"\nPrevious SQL (FAILED):\n{sql_plan.sql}\n\nError: {e}\n\nFix the SQL. Do not repeat the same mistake."
+                if sql_plan is not None
+                else f"\nError: {e}\n\nGenerate a correct SQL query."
+            )
+            try:
+                sql_plan2 = cast(SQLQueryPlan, generator.invoke([
+                    SystemMessage(content=Prompts.get_sql_generator_prompt(combined_schema)),
+                    HumanMessage(content=f"Question: {original_question}\nHint: {hint}{failed_sql_hint}"),
+                ]))
+                logger.info(f"Retry SQL: {sql_plan2.sql}")
+                df = self.duck_db_repo.run_select(sql_plan2.sql)
+                if df.empty:
+                    logger.info("Retry SQL returned no rows")
+                    return {
+                        "distilled_facts": [f"[{sources_label}] SQL query returned no results."],
+                        "sql_result": "",
+                    }
+                result_text = df.to_string(index=False)
+                fact = f"[SQL Result]\n[{sources_label}] {sql_plan2.explanation}\n{result_text}"
+                logger.info(f"Retry SQL result ({len(df)} rows):\n{result_text[:400]}")
+                return {"distilled_facts": [fact], "sql_result": result_text}
+            except Exception as e2:
+                logger.error(f"analytical_query_agent failed after retry: {e2}")
+                return {
+                    "distilled_facts": [f"[{sources_label}] SQL query could not be executed: {e2}"],
+                    "sql_result": None,
+                }
 
     def retrieval_grader_agent(self, state: AgentState):
         logger.info("--- GRADING & RE-RANKING DOCS ---")
@@ -373,8 +399,9 @@ class RagNodes:
             logger.info("Fact extractor returned empty list — skipping (no new relevant facts).")
             return {'distilled_facts': []}
 
+        iteration = state.get('retrieval_iterations', 0) + 1
         sources_tag = f"[Sources: {', '.join(sources_seen)}]"
-        attributed = f"{sources_tag}\n" + "\n".join(all_extracted)
+        attributed = f"[Iteration {iteration}]\n{sources_tag}\n" + "\n".join(all_extracted)
 
         logger.info(f"Distilled facts block ({len(attributed)} chars)")
         return {'distilled_facts': [attributed]}
@@ -395,7 +422,7 @@ class RagNodes:
                 f"Available facts from database:\n{facts_context}\n\n"
                 f"Answer: {generated_answer}"
             )
-            checker_llm = self.llm.with_structured_output(CompletenessCheck)
+            checker_llm = self.llm_structured.with_structured_output(CompletenessCheck)
             result = cast(CompletenessCheck, checker_llm.invoke([
                 SystemMessage(content=Prompts.get_completeness_checker_prompt()),
                 HumanMessage(content=human_content),
@@ -492,7 +519,7 @@ class RagNodes:
                 for doc in filtered_results[:10]
             )
 
-        hallucination_grader_llm = self.llm.with_structured_output(GradeHallucinations)
+        hallucination_grader_llm = self.llm_structured.with_structured_output(GradeHallucinations)
 
         grade = hallucination_grader_llm.invoke([
             SystemMessage(content=Prompts.get_hallucination_grader_agent()),
@@ -540,18 +567,12 @@ class RagNodes:
 
     @staticmethod
     def route_after_analytical(state: AgentState):
-        """After ANALYTICAL_QUERY: hybrid continues to vector search, sql goes straight to synthesizer.
-        If SQL errored (sql_result=None) or returned no rows (sql_result=''), fall back to vector search."""
+        """After ANALYTICAL_QUERY: hybrid continues to vector search, sql goes straight to synthesizer."""
         plan = state.get('query_plan')
         queries = state.get('rewritten_queries') or [state['messages'][-1].content]
-        sql_result = state.get('sql_result')
 
         if plan and plan.strategy == QueryStrategy.HYBRID:
             logger.info("route_after_analytical → RESEARCH_WORKER fan-out (hybrid)")
-            return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
-
-        if sql_result is None or sql_result == "":
-            logger.info("route_after_analytical → RESEARCH_WORKER (SQL failed/empty, falling back to vector)")
             return [Send(NodeName.RESEARCH_WORKER, {'query': q}) for q in queries]
 
         logger.info("route_after_analytical → SYNTHESIZER (sql)")
