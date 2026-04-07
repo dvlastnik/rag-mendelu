@@ -3379,6 +3379,7 @@ dependencies = [
     { name = "qdrant-client" },
     { name = "sentence-transformers" },
     { name = "spacy" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -3404,6 +3405,7 @@ requires-dist = [
     { name = "qdrant-client", specifier = ">=1.16.2" },
     { name = "sentence-transformers", specifier = ">=3.0.0" },
     { name = "spacy", specifier = ">=3.8.11" },
+    { name = "tqdm", specifier = ">=4.65.0" },
 ]
 
 [[package]]

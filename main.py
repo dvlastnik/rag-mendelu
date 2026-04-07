@@ -3,6 +3,7 @@ import json
 import os
 import time
 from dotenv import load_dotenv
+from tqdm import tqdm
 import datetime
 from pathlib import Path
 
@@ -49,8 +50,7 @@ def run_etl_general(
         files = [str(path_obj)]
 
     if delete_collection:
-        for file in files:
-            sql_db.drop_table(Path(file).stem)
+        sql_db.delete_database()
 
     if collection_name:
         db_repository.collection_name = collection_name
@@ -61,7 +61,7 @@ def run_etl_general(
 
     print(f"\nIngesting {len(files)} file(s) into collection '{collection_name}'...\n")
 
-    for file in files:
+    for file in tqdm(files, desc="Ingesting files", unit="file"):
         print(f"  -> {Path(file).name}")
         start_time = time.time()
 
@@ -293,7 +293,7 @@ def main():
         }
     )
 
-    sql_db = DuckDbRepository()
+    sql_db = DuckDbRepository(db_path=f"data/sql/{collection_name}.duckdb")
 
     if args.run_etl:
         run_etl_general(

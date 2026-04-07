@@ -189,3 +189,6 @@ tests/rag/results/*
 evaluation_matrix.csv
 
 .DS_store
+
+# sql db files
+data/sql/*

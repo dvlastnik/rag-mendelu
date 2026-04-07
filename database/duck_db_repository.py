@@ -167,6 +167,17 @@ class DuckDbRepository:
                 except Exception as e:
                     logger.warning(f"Failed to drop table '{t}': {e}")
 
+    def delete_database(self) -> None:
+        """Delete the .duckdb file and re-open a fresh connection (used on --erase)."""
+        self.close()
+        path = pathlib.Path(self.db_path)
+        if path.exists():
+            path.unlink()
+            logger.info(f"Deleted DuckDB file: {self.db_path}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = duckdb.connect(self.db_path)
+        logger.info(f"DuckDbRepository reconnected to {self.db_path}")
+
     def close(self) -> None:
         try:
             self.conn.close()

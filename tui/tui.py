@@ -31,7 +31,7 @@ def _text_with_back(message: str, default: str = "") -> str | object:
     @kb.add("backspace")
     def _(event):
         if event.app.current_buffer.text == "":
-            raise _GoBack()
+            event.app.exit(exception=_GoBack())
         event.app.current_buffer.delete_before_cursor()
 
     try:

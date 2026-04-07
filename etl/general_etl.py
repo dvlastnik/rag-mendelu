@@ -3,6 +3,7 @@ import traceback
 import pathlib
 from typing import List, Dict, Optional
 import pandas as pd
+from tqdm import tqdm
 from langchain_core.documents import Document
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 
@@ -96,9 +97,8 @@ class GeneralEtl(BaseEtl):
             split_docs = self._split_by_headers(text_without_tables)
             total = len(split_docs)
             logger.info(f"Processing {total} sections from '{self.file.name}'...")
-            print(f"    {total} sections found")
 
-            for i, doc in enumerate(split_docs, 1):
+            for i, doc in enumerate(tqdm(split_docs, desc=f"  {self.file.name}", unit="section", leave=False), 1):
                 cleaned = self._clean_text(doc.page_content)
                 if not cleaned:
                     continue
@@ -197,7 +197,7 @@ class GeneralEtl(BaseEtl):
         texts: List[str] = []
         row_metadatas: List[Dict] = []
 
-        for row_index, row in self.df.iterrows():
+        for row_index, row in tqdm(self.df.iterrows(), total=len(self.df), desc=f"  {self.file.name}", unit="row", leave=False):
             parts: List[str] = []
             row_meta: Dict = {}
 
