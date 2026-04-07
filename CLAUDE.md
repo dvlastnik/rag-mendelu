@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Ollama must be running on the host first (GPU used natively on any platform):
 #   macOS/Windows: open Ollama desktop app   |   Linux: ollama serve
 # Then pull your model:  ollama pull ministral-3:8b
-docker compose up -d                         # Start Qdrant + PostgreSQL
+docker compose up -d                         # Start Qdrant
 docker compose run --rm -it app              # Launch TUI wizard (no args)
 docker compose run --rm -it app --chat       # Interactive RAG chat (skip TUI)
 docker compose run --rm app --run-etl --path /data/input/   # Ingest from ./data/input/
@@ -21,7 +21,7 @@ docker compose run --rm -v /your/path:/data/input:ro app --run-etl --path /data/
 
 **Local dev (no Docker, for tests and development):**
 ```bash
-docker compose up -d          # Start Qdrant + PostgreSQL (Ollama stays on host)
+docker compose up -d          # Start Qdrant (Ollama stays on host)
 uv sync                       # Install Python dependencies
 uv run main.py                # Launch interactive TUI (no args → TUI wizard)
 uv run main.py --chat
@@ -53,7 +53,7 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 ### Infrastructure
 - **Qdrant** (container, port 6333): Vector database using hybrid search (dense + sparse vectors, 384-dim, DOT distance); data in `qdrant_data` volume
 - **Ollama** (host process, port 11434): LLM runtime runs **locally on the host** (not in Docker) so GPU acceleration works natively on NVIDIA, AMD (ROCm), and Apple Silicon (Metal); app container reaches it via `host.docker.internal:11434`
-- **PostgreSQL** (container, port 5432): Analytical SQL database for tabular data (CSV/XLSX); data in `postgres_data` volume
+- **DuckDB** (embedded in-process, no container): Analytical SQL database for tabular data (CSV/XLSX); one file per collection at `data/sql/{collection_name}.duckdb`, persisted via `duckdb_data` volume
 - **app** (container, `profiles: [app]`): Python CLI; not auto-started by `docker compose up` — invoke with `docker compose run`
 
 **Environment variables** (set in `docker-compose.yaml`, override via `.env`):
@@ -62,9 +62,6 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 - `OLLAMA_MODEL` — model to pull and use (default: `ministral-3:8b`)
 - `COLLECTION_NAME` — Qdrant collection (default: `default_name`)
 - `VECTOR_DB_DISTANCE` — distance metric (default: `DOT`)
-- `POSTGRES_HOST` / `POSTGRES_PORT` — PostgreSQL connection (default: `postgres` / `5432`)
-- `POSTGRES_DB` — database name (default: `rag_mendelu`)
-- `POSTGRES_USER` / `POSTGRES_PASSWORD` — PostgreSQL credentials (default: `rag` / `rag_password`)
 
 ### Module Overview
 
@@ -78,11 +75,11 @@ uv run pytest tests/rag/ --collection-name MyCollection  # Use a specific collec
 
 **Supported file types (`GeneralEtl`):**
 
-| Extension | Qdrant | PostgreSQL | Notes |
+| Extension | Qdrant | DuckDB | Notes |
 |---|---|---|---|
 | `.pdf`, `.docx`, `.pptx` | Text chunks + table rows | Extracted tables (one row per table row, columns as fields) | Docling `DocumentConverter` → Markdown → table extract → header-split → semantic/recursive chunk → embed |
 | `.md`, `.txt` | Text chunks + table rows | Extracted tables | Copied to `data/general/` → same Markdown pipeline as above |
-| `.csv`, `.xlsx` | **Row-per-document**: each row → pipe-delimited text + all column values as typed metadata; no chunking | Full file registered as PostgreSQL table for SQL aggregation | All columns stored as typed metadata in both stores |
+| `.csv`, `.xlsx` | **Row-per-document**: each row → pipe-delimited text + all column values as typed metadata; no chunking | Full file registered as DuckDB table for SQL aggregation | All columns stored as typed metadata in both stores |
 
 CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name": "Split Fiction", "category": "Co-op Adventure", "review": 9.4, "row_index": 13, "text": "name: Split Fiction | ...", ...}` — column names become metadata keys dynamically from headers, enabling Qdrant numeric/keyword filtering per dataset.
 
@@ -99,7 +96,7 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 **`database/`** — Storage abstraction
 - `BaseDbRepository` (ABC) → defines the interface: `connect`, `search`, `insert`, `delete`, `get_count`, etc.
 - `QdrantDbRepository` → production implementation with hybrid search (dense + sparse)
-- `PostgresqlRepository` → PostgreSQL for analytical SQL queries on tabular data; key methods: `register_csv`, `register_xlsx`, `register_dataframe` (in-memory DataFrame), `run_select`, `get_compact_catalog`, `drop_table`
+- `DuckDbRepository` → embedded DuckDB for analytical SQL queries on tabular data; key methods: `register_csv`, `register_xlsx`, `register_dataframe` (in-memory DataFrame), `run_select`, `get_compact_catalog`, `drop_table`, `delete_database`
 - `MyDocument` → internal document model with `id`, `text`, `embedding`, `sparse_embedding`, `metadata`
 
 **`text_embedding/`** — In-process embedding module (no HTTP/Docker required)
@@ -137,7 +134,7 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 
 ### Key Data Flow
 
-**ETL (GeneralEtl):** Any file → `BaseEtl.extract()` (converter registry) → Markdown in `data/general/` → `GeneralEtl.transform()` (extract tables → Qdrant + PostgreSQL, split by H1–H4 headers, clean, semantic/recursive chunk, embed) → Qdrant. For CSV/XLSX: original file also registered in PostgreSQL via `register_csv`/`register_xlsx`. For PDF/DOCX/MD/TXT: extracted tables registered via `register_dataframe`.
+**ETL (GeneralEtl):** Any file → `BaseEtl.extract()` (converter registry) → Markdown in `data/general/` → `GeneralEtl.transform()` (extract tables → Qdrant + DuckDB, split by H1–H4 headers, clean, semantic/recursive chunk, embed) → Qdrant. For CSV/XLSX: original file also registered in DuckDB via `register_csv`/`register_xlsx`. For PDF/DOCX/MD/TXT: extracted tables registered via `register_dataframe`.
 
 **ETL metadata per chunk (documents):** `source` (filename stem), `file_type` (no leading dot, e.g. `pdf`), `header_path`, `headers`, `is_table`, `chunk_index`
 
@@ -153,7 +150,7 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 - `DroughtEtl` is retained for the climate dataset but `GeneralEtl` is the active default
 - Reranker top-N is adaptive via `ModelParams.create_from_context_window()` — not a fixed 10
 - Re-indexing required when changing chunk parameters or switching embedding models: `docker compose run --rm app --run-etl --erase --path /data/input/`
-- PostgreSQL data is persisted in `postgres_data` named volume; `--erase` drops all PostgreSQL tables alongside the Qdrant collection
+- DuckDB data is persisted in the `duckdb_data` named Docker volume; `--erase` deletes the collection's `.duckdb` file and re-opens a fresh connection alongside erasing the Qdrant collection
 - ETL input files: place in `./data/input/` on the host (bind-mounted read-only to `/data/input` in the container); for ad-hoc paths: `docker compose run --rm -v /your/path:/data/input:ro app --run-etl --path /data/input/`
 
 ### Document Metadata Schema
@@ -175,7 +172,7 @@ CSV/XLSX metadata example: `{"source": "games_2025", "file_type": "csv", "name":
 
 **QueryPlanner** — Selects a retrieval strategy (`VECTOR`, `SQL`, `HYBRID`, `SCROLL`) and generates vector search queries. Detects aggregation intent and identifies the target source/dataset. Routes to the appropriate downstream node.
 
-**AnalyticalQuery** — Generates and executes a SQL query against PostgreSQL using `get_compact_catalog()` for schema context. For `HYBRID` strategy, passes SQL results to ResearchWorker for further vector refinement.
+**AnalyticalQuery** — Generates and executes a SQL query against DuckDB using `get_compact_catalog()` for schema context. For `HYBRID` strategy, passes SQL results to ResearchWorker for further vector refinement.
 
 **ScrollRetriever** — Fetches all chunks from a specific source (used for `SCROLL` strategy / summarization queries), then reranks the top-N and passes to FactExtractor.
 
