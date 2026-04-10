@@ -172,9 +172,11 @@ docker compose down -v
 
 ---
 
-## Local Development (uv)
+## Local Development
 
 Use this approach when you want to run the Python app directly on your machine — no app container, no image builds, instant code changes take effect.
+
+**NOTE:** Whole project i was using `uv`, but if you prefer classic there is `requirements.txt` file that ensures you can setup this project with `pip`.
 
 ### 1. Start Qdrant and PostgreSQL
 
