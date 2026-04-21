@@ -1,6 +1,6 @@
 import difflib
 import re
-from typing import cast, Literal, List
+from typing import cast, Literal, List, Optional
 from langchain.chat_models import BaseChatModel
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -8,6 +8,7 @@ from rag.agents.state import AgentState
 from rag.agents.models import GeneralOrRagDecision
 from rag.agents.enums import NodeName, Intent
 from rag.agents.prompts import Prompts
+from rag.agents.scientific_source import ScientificDataSource
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -20,22 +21,32 @@ _SUMMARIZATION_PATTERNS = re.compile(
     r'\b(summarize|summarise|summary\s+of|overview\s+of|what\s+is\s+.+\s+about)\b',
     re.IGNORECASE,
 )
+_SCIENTIFIC_PATTERNS = re.compile(
+    r'\b(climate\s+dataset|NetCDF|raster|scientific\s+data|grib|geotiff|variable)\b',
+    re.IGNORECASE,
+)
 
 
 class GeneralNodes:
-    def __init__(self, llm: BaseChatModel, available_sources: List[str] | None = None):
+    def __init__(
+        self,
+        llm: BaseChatModel,
+        available_sources: List[str] | None = None,
+        scientific_source: Optional[ScientificDataSource] = None,
+    ):
         self.llm = llm
         self.available_sources = available_sources or []
+        self.scientific_source = scientific_source
 
     def _match_source(self, raw_source: str | None) -> str | None:
         """Fuzzy-match a user-mentioned source against available_sources."""
         if not raw_source or not self.available_sources:
             return None
-        
+
         lower_map = {s.lower(): s for s in self.available_sources}
         if raw_source.lower() in lower_map:
             return lower_map[raw_source.lower()]
-        
+
         matches = difflib.get_close_matches(raw_source.lower(), lower_map.keys(), n=1, cutoff=0.5)
         if matches:
             return lower_map[matches[0]]
@@ -52,6 +63,13 @@ class GeneralNodes:
             return Intent.RAG_SUMMARIZATION
         return intent
 
+    def _scientific_intent_upgrade(self, text: str, intent: Intent) -> Intent:
+        """Upgrade intent to SCIENTIFIC when scientific keywords are detected and source is wired."""
+        if self.scientific_source is not None and intent not in (Intent.GENERAL, Intent.MULTI_SOURCE):
+            if _SCIENTIFIC_PATTERNS.search(text):
+                return Intent.SCIENTIFIC
+        return intent
+
     def router_agent(self, state: AgentState):
         logger.info("--- ROUTING ---")
         messages = state['messages']
@@ -60,14 +78,20 @@ class GeneralNodes:
         history_summary = "\n".join([f"{m.type}: {m.content}" for m in messages[-3:]])
         human_msg = f'Context:\n{history_summary}\n\nCurrent User Input: {last_message}'
 
+        if self.scientific_source is not None:
+            prompt = Prompts.get_router_agent_prompt_with_scientific(self.available_sources)
+        else:
+            prompt = Prompts.get_router_agent_prompt(self.available_sources)
+
         decision = self.llm.with_structured_output(GeneralOrRagDecision).invoke([
-            SystemMessage(content=Prompts.get_router_agent_prompt(self.available_sources)),
+            SystemMessage(content=prompt),
             HumanMessage(content=human_msg)
         ])
 
         decision = cast(GeneralOrRagDecision, decision)
 
         intent = self._keyword_intent_upgrade(last_message, decision.intent)
+        intent = self._scientific_intent_upgrade(last_message, intent)
         if intent != decision.intent:
             logger.info(f"Keyword fallback upgraded intent: {decision.intent} -> {intent}")
 
@@ -75,10 +99,18 @@ class GeneralNodes:
         if decision.detected_source and not detected_source:
             logger.warning(f"Source '{decision.detected_source}' not matched in available sources: {self.available_sources}")
 
-        logger.info(f"Router decision: intent={intent}, detected_source={detected_source}")
+        if intent == Intent.MULTI_SOURCE:
+            data_source_scope = "both"
+        elif intent == Intent.SCIENTIFIC:
+            data_source_scope = "scientific"
+        else:
+            data_source_scope = "docs"
+
+        logger.info(f"Router decision: intent={intent}, detected_source={detected_source}, scope={data_source_scope}")
         return {
             "intent": intent,
             "detected_source": detected_source,
+            "data_source_scope": data_source_scope,
         }
 
     def general_agent(self, state: AgentState):
@@ -92,6 +124,14 @@ class GeneralNodes:
     @staticmethod
     def route_intent(state: AgentState) -> Literal[NodeName.QUERY_PLANNER, NodeName.GENERAL]:
         intent = state['intent']
+        if intent in (Intent.RAG, Intent.RAG_EXHAUSTIVE, Intent.RAG_SUMMARIZATION):
+            return NodeName.QUERY_PLANNER
+        return NodeName.GENERAL
+
+    def route_intent_with_scientific(self, state: AgentState):
+        intent = state['intent']
+        if intent in (Intent.SCIENTIFIC, Intent.MULTI_SOURCE):
+            return NodeName.SCIENTIFIC_RETRIEVER
         if intent in (Intent.RAG, Intent.RAG_EXHAUSTIVE, Intent.RAG_SUMMARIZATION):
             return NodeName.QUERY_PLANNER
         return NodeName.GENERAL

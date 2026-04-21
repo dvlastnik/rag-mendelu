@@ -178,3 +178,113 @@ def test_keyword_upgrade_summarize():
 def test_keyword_upgrade_no_match():
     result = GeneralNodes._keyword_intent_upgrade("What year did Metallica form?", Intent.RAG)
     assert result == Intent.RAG
+
+
+# ==========================================
+# 5. SCIENTIFIC INTENT UPGRADE & ROUTING
+# ==========================================
+
+# --- 5a. _scientific_intent_upgrade ---
+
+def test_scientific_upgrade_triggers_on_keyword_with_source(mock_llm):
+    """RAG intent + scientific keyword + source wired → SCIENTIFIC."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    result = node._scientific_intent_upgrade("show me the NetCDF data", Intent.RAG)
+    assert result == Intent.SCIENTIFIC
+
+
+def test_scientific_upgrade_no_op_without_source(mock_llm):
+    """Same query but scientific_source=None → intent unchanged."""
+    node = GeneralNodes(mock_llm, scientific_source=None)
+    result = node._scientific_intent_upgrade("show me the NetCDF data", Intent.RAG)
+    assert result == Intent.RAG
+
+
+def test_scientific_upgrade_does_not_touch_general(mock_llm):
+    """GENERAL intent is never upgraded even with keywords and source wired."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    result = node._scientific_intent_upgrade("NetCDF raster climate dataset", Intent.GENERAL)
+    assert result == Intent.GENERAL
+
+
+def test_scientific_upgrade_does_not_downgrade_multi_source(mock_llm):
+    """MULTI_SOURCE stays MULTI_SOURCE even with scientific keywords."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    result = node._scientific_intent_upgrade("compare raster data with documents", Intent.MULTI_SOURCE)
+    assert result == Intent.MULTI_SOURCE
+
+
+def test_scientific_upgrade_no_match_no_change(mock_llm):
+    """No scientific keywords → intent unchanged."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    result = node._scientific_intent_upgrade("What year did Metallica form?", Intent.RAG)
+    assert result == Intent.RAG
+
+
+# --- 5b. route_intent_with_scientific ---
+
+def test_route_intent_scientific_goes_to_scientific_retriever(mock_llm):
+    """SCIENTIFIC intent → SCIENTIFIC_RETRIEVER."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    assert node.route_intent_with_scientific({'intent': Intent.SCIENTIFIC}) == NodeName.SCIENTIFIC_RETRIEVER
+
+
+def test_route_intent_multi_source_goes_to_scientific_retriever(mock_llm):
+    """MULTI_SOURCE intent → SCIENTIFIC_RETRIEVER (scientific runs first)."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    assert node.route_intent_with_scientific({'intent': Intent.MULTI_SOURCE}) == NodeName.SCIENTIFIC_RETRIEVER
+
+
+def test_route_intent_with_scientific_rag_goes_to_query_planner(mock_llm):
+    """RAG intent → QUERY_PLANNER."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    assert node.route_intent_with_scientific({'intent': Intent.RAG}) == NodeName.QUERY_PLANNER
+
+
+def test_route_intent_with_scientific_general_goes_to_general(mock_llm):
+    """GENERAL intent → GENERAL."""
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    assert node.route_intent_with_scientific({'intent': Intent.GENERAL}) == NodeName.GENERAL
+
+
+# --- 5c. router_agent data_source_scope ---
+
+def test_router_sets_scope_both_for_multi_source(mock_llm):
+    """LLM returns MULTI_SOURCE → data_source_scope == 'both'."""
+    mock_runnable = MagicMock()
+    mock_runnable.invoke.return_value = GeneralOrRagDecision(intent=Intent.MULTI_SOURCE)
+    mock_llm.with_structured_output.return_value = mock_runnable
+
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    state = {'messages': [HumanMessage(content="compare dataset with documents")]}
+    result = node.router_agent(state)
+
+    assert result['data_source_scope'] == 'both'
+    assert result['intent'] == Intent.MULTI_SOURCE
+
+
+def test_router_sets_scope_scientific_for_scientific(mock_llm):
+    """LLM returns SCIENTIFIC → data_source_scope == 'scientific'."""
+    mock_runnable = MagicMock()
+    mock_runnable.invoke.return_value = GeneralOrRagDecision(intent=Intent.SCIENTIFIC)
+    mock_llm.with_structured_output.return_value = mock_runnable
+
+    node = GeneralNodes(mock_llm, scientific_source=MagicMock())
+    state = {'messages': [HumanMessage(content="show NetCDF temperature variable")]}
+    result = node.router_agent(state)
+
+    assert result['data_source_scope'] == 'scientific'
+    assert result['intent'] == Intent.SCIENTIFIC
+
+
+def test_router_sets_scope_docs_for_rag(mock_llm):
+    """LLM returns RAG → data_source_scope == 'docs'."""
+    mock_runnable = MagicMock()
+    mock_runnable.invoke.return_value = GeneralOrRagDecision(intent=Intent.RAG)
+    mock_llm.with_structured_output.return_value = mock_runnable
+
+    node = GeneralNodes(mock_llm)
+    state = {'messages': [HumanMessage(content="What year did the drought start?")]}
+    result = node.router_agent(state)
+
+    assert result['data_source_scope'] == 'docs'

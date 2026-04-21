@@ -1,5 +1,6 @@
 import os
 import re
+from typing import Optional
 
 from langgraph.graph import StateGraph, START, END
 from langchain_ollama import ChatOllama
@@ -8,6 +9,7 @@ from rag.agents.state import AgentState
 from rag.agents.enums import NodeName
 from rag.agents.nodes.general_nodes import GeneralNodes
 from rag.agents.nodes.rag_nodes import RagNodes
+from rag.agents.scientific_source import ScientificDataSource
 
 from database.base.base_db_repository import BaseDbRepository
 from database.duck_db_repository import DuckDbRepository
@@ -36,6 +38,7 @@ def build_graph(
     embedding_service: TextEmbeddingService,
     duck_db_repo: DuckDbRepository,
     model_name: str = "ministral-3:8b",
+    scientific_source: Optional[ScientificDataSource] = None,
 ):
     context_window = _context_window_from_model(model_name)
     logger.info(f"Model '{model_name}' → context_window={context_window}")
@@ -62,7 +65,11 @@ def build_graph(
     )
 
     available_sources = database_service.get_all_filenames()
-    router_nodes = GeneralNodes(llm=llm, available_sources=available_sources)
+    router_nodes = GeneralNodes(
+        llm=llm,
+        available_sources=available_sources,
+        scientific_source=scientific_source,
+    )
     rag_nodes = RagNodes(
         llm=llm,
         db_repository=database_service,
@@ -91,14 +98,65 @@ def build_graph(
 
     builder.add_edge(START, NodeName.ROUTER)
 
-    builder.add_conditional_edges(
-        NodeName.ROUTER,
-        GeneralNodes.route_intent,
-        path_map={
-            NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER,
-            NodeName.GENERAL: NodeName.GENERAL,
-        }
-    )
+    if scientific_source is not None:
+        from rag.agents.nodes.scientific_nodes import ScientificNodes
+        scientific_nodes = ScientificNodes(scientific_source=scientific_source, llm=llm)
+        builder.add_node(NodeName.SCIENTIFIC_RETRIEVER, scientific_nodes.scientific_retriever)
+        builder.add_node(NodeName.MULTI_SOURCE_SYNTHESIZER, scientific_nodes.multi_source_synthesizer)
+
+        builder.add_conditional_edges(
+            NodeName.ROUTER,
+            router_nodes.route_intent_with_scientific,
+            path_map={
+                NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER,
+                NodeName.GENERAL: NodeName.GENERAL,
+                NodeName.SCIENTIFIC_RETRIEVER: NodeName.SCIENTIFIC_RETRIEVER,
+            }
+        )
+
+        def _route_after_scientific(state: AgentState):
+            return NodeName.QUERY_PLANNER if state.get('data_source_scope') == 'both' else END
+
+        builder.add_conditional_edges(
+            NodeName.SCIENTIFIC_RETRIEVER,
+            _route_after_scientific,
+            path_map={NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER, END: END},
+        )
+
+        def _route_hallucination_with_scientific(state: AgentState):
+            base = rag_nodes.route_hallucination(state)
+            if base == END and state.get('data_source_scope') == 'both':
+                return NodeName.MULTI_SOURCE_SYNTHESIZER
+            return base
+
+        builder.add_conditional_edges(
+            NodeName.HALLUCINATION_GRADER_AGENT,
+            _route_hallucination_with_scientific,
+            path_map={
+                NodeName.SYNTHESIZER: NodeName.SYNTHESIZER,
+                NodeName.MULTI_SOURCE_SYNTHESIZER: NodeName.MULTI_SOURCE_SYNTHESIZER,
+                END: END,
+            }
+        )
+        builder.add_edge(NodeName.MULTI_SOURCE_SYNTHESIZER, END)
+    else:
+        builder.add_conditional_edges(
+            NodeName.ROUTER,
+            GeneralNodes.route_intent,
+            path_map={
+                NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER,
+                NodeName.GENERAL: NodeName.GENERAL,
+            }
+        )
+        builder.add_conditional_edges(
+            NodeName.HALLUCINATION_GRADER_AGENT,
+            rag_nodes.route_hallucination,
+            path_map={
+                NodeName.SYNTHESIZER: NodeName.SYNTHESIZER,
+                END: END,
+            }
+        )
+
     builder.add_edge(NodeName.GENERAL, END)
 
     builder.add_conditional_edges(
@@ -134,14 +192,6 @@ def build_graph(
         path_map={
             NodeName.HALLUCINATION_GRADER_AGENT: NodeName.HALLUCINATION_GRADER_AGENT,
             NodeName.RESEARCH_WORKER: NodeName.RESEARCH_WORKER,
-        }
-    )
-    builder.add_conditional_edges(
-        NodeName.HALLUCINATION_GRADER_AGENT,
-        rag_nodes.route_hallucination,
-        path_map={
-            NodeName.SYNTHESIZER: NodeName.SYNTHESIZER,
-            END: END,
         }
     )
 

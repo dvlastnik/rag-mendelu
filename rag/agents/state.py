@@ -1,6 +1,6 @@
 import operator
 from langgraph.graph import add_messages
-from typing import Annotated, List
+from typing import Annotated, List, Any
 from typing_extensions import TypedDict
 
 from database.base.my_document import MyDocument
@@ -21,6 +21,8 @@ class AgentState(TypedDict):
     hallucination_retries: int
     retrieval_iterations: int
     completeness_follow_up_query: str
+    scientific_results: Annotated[List[Any], operator.add]
+    data_source_scope: str | None
 
 class WorkerState(TypedDict):
     query: str

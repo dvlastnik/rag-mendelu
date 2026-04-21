@@ -8,8 +8,8 @@ from utils.utils import Utils
 
 logger = get_logger(__name__)
 
-type ConvertFuncData = Dict[str, Any]
-type ConvertFunc = Callable[[ConvertFuncData], DataFrame | None]
+ConvertFuncData = Dict[str, Any]
+ConvertFunc = Callable[[ConvertFuncData], DataFrame | None]
 
 converter_functions: Dict[str, ConvertFunc] = {}
 

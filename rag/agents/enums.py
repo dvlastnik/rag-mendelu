@@ -12,6 +12,8 @@ class NodeName(str, Enum):
     HALLUCINATION_GRADER_AGENT = 'hallucination_grader_agent'
     SYNTHESIZER = 'synthesizer_agent'
     SCROLL_RETRIEVER = 'scroll_retriever'
+    SCIENTIFIC_RETRIEVER = 'scientific_retriever'
+    MULTI_SOURCE_SYNTHESIZER = 'multi_source_synthesizer'
     ERROR = 'error_agent'
 
 class Intent(str, Enum):
@@ -19,3 +21,5 @@ class Intent(str, Enum):
     RAG = 'rag'
     RAG_EXHAUSTIVE = 'exhaustive'
     RAG_SUMMARIZATION = 'summarization'
+    SCIENTIFIC = 'scientific'
+    MULTI_SOURCE = 'multi_source'

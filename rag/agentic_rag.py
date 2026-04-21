@@ -1,17 +1,17 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import os
 import sys
 import traceback
 import urllib.request
 import urllib.error
 
-from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 
 from database.base.base_db_repository import BaseDbRepository
 from database.duck_db_repository import DuckDbRepository
 from text_embedding import TextEmbeddingService
 from rag.agents.graph import build_graph
+from rag.agents.scientific_source import ScientificDataSource
 from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -37,10 +37,14 @@ class AgenticRAG:
         embedding_service: TextEmbeddingService,
         sql_db_repo: DuckDbRepository,
         model_name: str = "ministral-3:8b",
+        scientific_source: Optional[ScientificDataSource] = None,
     ):
         _check_ollama_running()
         logger.info(f"Agentic RAG configured with {model_name}")
-        self.agents = build_graph(database_service, embedding_service, sql_db_repo, model_name)
+        self.agents = build_graph(
+            database_service, embedding_service, sql_db_repo, model_name,
+            scientific_source=scientific_source,
+        )
         
 
     def chat(self, question: str) -> Dict[str, Any]:
@@ -61,6 +65,8 @@ class AgenticRAG:
             'distilled_facts': [],
             'completeness_follow_up_query': '',
             'hallucination_status': None,
+            'scientific_results': [],
+            'data_source_scope': None,
         }
 
         try:
@@ -72,7 +78,11 @@ class AgenticRAG:
                 'original_query': question,
                 'response': last_message.content,
                 'sources': final_state['filtered_results'],
-                'distilled_facts': final_state['distilled_facts']
+                'distilled_facts': final_state['distilled_facts'],
+                'rewritten_queries': final_state.get('rewritten_queries', []),
+                'sql_result': final_state.get('sql_result'),
+                'scientific_results': final_state.get('scientific_results', []),
+                'data_source_scope': final_state.get('data_source_scope', 'docs'),
             }
 
         except Exception as e:

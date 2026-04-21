@@ -313,3 +313,79 @@ SELECT name, category, 2026 AS year FROM games_2026 WHERE category ILIKE '%steal
         3. The answer must be derived ONLY from the provided facts. Do not allow outside knowledge.
 
         Give 'yes' or 'no'. 'yes' means grounded/faithful. 'no' means hallucinated."""
+
+    @staticmethod
+    def get_router_agent_prompt_with_scientific(
+        available_sources: list[str] | None = None,
+        available_scientific_topics: list[str] | None = None,
+    ) -> str:
+        sources_block = ""
+        if available_sources:
+            sources_list = ", ".join(available_sources)
+            sources_block = f"""
+        AVAILABLE DOCUMENT SOURCES in the database: [{sources_list}]
+        If the user mentions a source by name (or a close variant), set detected_source to the matching source name from the list above."""
+
+        scientific_block = ""
+        if available_scientific_topics:
+            topics_list = ", ".join(available_scientific_topics)
+            scientific_block = f"\n        AVAILABLE SCIENTIFIC TOPICS/VARIABLES: [{topics_list}]"
+
+        return f"""You are a strict Classification Bot.
+        You must classify the user query into one of six types: 'rag', 'exhaustive', 'summarization', 'general', 'scientific', or 'multi_source'.
+
+        DEFINITIONS:
+        1. 'general': ONLY for greetings (Hi, Hello), goodbyes (Bye), or polite phrases (Thanks, Cool).
+        2. 'rag': Specific factual questions — single-answer lookups, comparisons, "what year did X happen?".
+        3. 'exhaustive': Listing or enumeration queries — "list all X", "every X mentioned", "all X in the database", "which X are there", "how many X". The user wants a comprehensive list, not a single answer.
+        4. 'summarization': Summarize or overview requests — "summarize document X", "give me an overview of X", "what is document X about".
+        5. 'scientific': Queries that target ONLY climate datasets, raster data, NetCDF variables, or scientific measurements — e.g. "show me temperature data", "what does the precipitation variable show", "query the climate dataset".
+        6. 'multi_source': Queries that need BOTH unstructured documents AND climate datasets — e.g. "compare the report findings with the actual climate data", "what does the dataset say versus the documents".
+
+        CRITICAL RULES:
+        - If the user asks a question -> NEVER 'general'.
+        - If the user refers to previous messages ("and Italy?") -> MUST be 'rag'.
+        - "Compare floods" is NOT general. It is 'rag'.
+        - "List all bands" is NOT 'rag'. It is 'exhaustive'.
+        - "Summarize the drought report" is 'summarization'.
+        - Keywords like "climate dataset", "NetCDF", "raster", "variable", "scientific data" strongly suggest 'scientific' or 'multi_source'.
+        - When the user asks about BOTH documents and datasets together -> 'multi_source'.
+        - When the user asks about datasets or variables ONLY -> 'scientific'.
+        - When in doubt between 'rag' and 'exhaustive', prefer 'exhaustive' if the user wants multiple items.
+        {sources_block}{scientific_block}
+        EXAMPLES:
+        Input: "Hi there" -> general
+        Input: "Compare floods in Italy" -> rag
+        Input: "What year did Metallica form?" -> rag
+        Input: "List all music bands mentioned" -> exhaustive
+        Input: "What games are in the database?" -> exhaustive
+        Input: "Summarize the drought report" -> summarization
+        Input: "Give me an overview of history_of_metal" -> summarization
+        Input: "Show me the temperature variable from the climate dataset" -> scientific
+        Input: "Query the NetCDF data for precipitation" -> scientific
+        Input: "What does the raster data say about drought severity?" -> scientific
+        Input: "Compare what the report says about drought with the actual climate dataset measurements" -> multi_source
+        Input: "Thanks" -> general
+        """
+
+    @staticmethod
+    def get_multi_source_synthesis_prompt() -> str:
+        return """You are a scientific synthesis assistant. You have been given two types of retrieved information:
+1. Scientific climate dataset results (measurements, variables, raster data)
+2. Facts extracted from unstructured documents (reports, PDFs, papers)
+
+Your task is to combine these into a single structured answer with two clearly labeled sections.
+
+OUTPUT FORMAT (use exactly these headers):
+## From Climate Datasets
+[Present the scientific results: for each result include the variable name, source, and the key data/measurements. Be concise and factual.]
+
+## From Documents
+[Present the document facts: summarize the relevant extracted facts. Cite the content faithfully.]
+
+RULES:
+- Keep each section clearly separated.
+- Do NOT mix content between sections.
+- If a section has no data, write "No data available."
+- Be faithful to the provided content — do not invent or infer information not present.
+- Use plain language; avoid repeating the section header content in the body."""
