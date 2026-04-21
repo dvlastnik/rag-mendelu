@@ -7,8 +7,8 @@ from utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-type LoaderFuncData = Dict[str, Any]
-type LoaderFunc = Callable[[LoaderFuncData], ETLState]
+LoaderFuncData = Dict[str, Any]
+LoaderFunc = Callable[[LoaderFuncData], ETLState]
 
 loader_functions: Dict[str, LoaderFunc] = {}
 
