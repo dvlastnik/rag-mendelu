@@ -4,7 +4,10 @@ import pathlib
 import re
 from typing import List
 from pathlib import Path
-from docling.document_converter import DocumentConverter
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import OcrOptions
 
 from utils.logging_config import get_logger
 
@@ -195,7 +198,13 @@ class Utils:
 
         try:
             logger.info(f"Converting {path.name} to Markdown...")
-            converter = DocumentConverter()
+            converter = DocumentConverter(
+                format_options={
+                        InputFormat.PDF: PdfFormatOption(
+                            pipeline_options=PdfPipelineOptions(do_ocr=False)
+                    ),
+                }
+            )
             result = converter.convert(str(path))
             text = result.document.export_to_markdown()
             output_path.write_text(text, encoding="utf-8")
