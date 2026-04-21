@@ -1,0 +1,32 @@
+[
+    {
+        "id": 1,
+        "question": "How did the extreme drought conditions impact the water levels of the Rio Negro at Manaus across the years 2023 and 2024, and what climate drivers contributed to this?",
+        "response": "In October 2023, the water level of the Rio Negro at the port of Manaus fell to its lowest level since records began in 1902. This severe drop was driven by the transition from La Niña to El Niño, combined with record-high global sea-surface temperatures. The situation worsened the following year; by mid-October 2024, the Rio Negro recorded an even lower water level, surpassing the previous record low set in October 2023. This occurred as large swathes of the Amazon basin endured extreme drought conditions, contributing to both Peru and Brazil experiencing their third-driest years on record",
+        "source": ["10.1175_2024BAMSStateoftheClimate.2.pdf", "SotC2024.pdf"]
+    },
+    {
+        "id": 2,
+        "question": "Trace the exact values and historical rankings of the Antarctic annual daily minimum sea-ice extent during the months of February in 2022, 2023, and 2024.",
+        "response": "In February 2022, the Antarctic sea-ice extent dropped to a then-record low of 1.92 million km2. The following year, on February 21, 2023, the sea-ice extent broke this record again, reaching an all-time low of 1.79 million km2. In 2024, the annual daily minimum sea-ice extent slightly rebounded but remained severely depleted, recorded on February 18 at 1.97 million km2, which ranks as the third-lowest on record (behind the 2023 and 2022 minimums).",
+        "source": ["Provisional_State_of_the_Climate_2022_en.pdf", "Statement_2022.pdf", "1347_Global-statement-2023_en.pdf", "SotC2024.pdf"]
+    },
+    {
+        "id": 3,
+        "question": "Explain the progression of the Global Ocean Heat Content (OHC) from 2022 through 2024. How much energy was added to the oceans between 2023 and 2024, and what does this indicate about the Earth's climate system?",
+        "response": "Around 90% of the energy trapped in the climate system by greenhouse gases is stored in the ocean, and Ocean Heat Content (OHC) serves as a key indicator of this accumulated heat. In 2022, global OHC reached a new observed record high, signaling a positive energy imbalance that guarantees future warming. In 2023, OHC broke the record again, reaching the highest level in the 65-year observational record, increasing at a rate equivalent to ~0.7 Watts per square meter (W m−2) of energy applied over Earth's surface. In 2024, observed global OHC set yet another record, exceeding the 2023 record by 16 ± 8 ZJ. Between 2023 and 2024, the OHC from 0 to 2000 meters increased at a massive rate equivalent to ~1.5 W m−2 of heat applied over the ocean surface.",
+        "source": ["Statement_2022.pdf", "10.1175_2024BAMSStateoftheClimate.2.pdf", "1347_Global-statement-2023_en.pdf", "SotC2024.pdf & WMO-1368-2025_en.pdf"]
+    },
+    {
+        "id": 4,
+        "question": "Compare the globally averaged atmospheric carbon dioxide (CO2) concentrations in 2022, 2023, and 2024. By what percentage did the 2024 concentration exceed pre-industrial levels, and how significant was the jump from 2023 to 2024?",
+        "response": "n 2022, the globally averaged carbon dioxide concentration was 417.1 ± 0.1 ppm, which was 50% higher than pre-industrial levels. In 2023, the annual global average CO2 concentration rose to 419.3 ± 0.1 ppm. In 2024, the CO2 concentration climbed to a new record of 422.8 ± 0.1 ppm, representing a 52% increase over the pre-industrial level of ~278 ppm. The growth from 2023 to 2024 was 3.4 ppm, which ties the 2015/2016 jump as the highest annual increase observed since the 1960s.",
+        "source": ["10.1175_2023BAMSStateoftheClimate.2.pdf", "10.1175_2023BAMSStateoftheClimate.2.pdf", "SotC2024.pdf"]
+    },
+    {
+        "id": 5,
+        "question": "Detail the sequence of devastating flooding and precipitation extremes in Pakistan from the historic 2022 monsoon season through the spring and summer of 2024. What were the specific human and economic tolls of the 2022 floods, and what subsequent extreme rainfall records were broken in 2024?",
+        "response": "In 2022, Pakistan experienced record-breaking monsoon rainfall in July and August, which inundated approximately 9% of the country's total area. This catastrophic flooding caused over 1,700 deaths, affected 33 million people, displaced nearly 8 million, and resulted in an estimated $30 billion in total damage and economic losses. The impacts of this severe disaster lingered into 2023, with displaced communities continuing to suffer from waterborne and vector-borne diseases triggered by new heavy rains in June 2023. In 2024, extreme weather struck the region again; Pakistan recorded its wettest April on record. During this month, cities like Quetta and Turbat received 180 mm to 220 mm of rain, triggering flash floods and landslides that caused at least 98 fatalities. Later that year, on August 1, 2024, Lahore Airport received 337 mm of rain in a single day, contributing to the country's second-wettest August on record, trailing only the extreme flood year of 2022.",
+        "source": ["Statement_2022.pdf", "Provisional_State_of_the_Climate_2022_en.pdf", "1347_Global-statement-2023_en.pdf", "10.1175_2024BAMSStateoftheClimate.2.pdf", "State of the Global Climate 2024_Extremes Supplement.pdf"]
+    }
+]
