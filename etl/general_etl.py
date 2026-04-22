@@ -1,3 +1,4 @@
+import gc
 import re
 import traceback
 import pathlib
@@ -75,7 +76,8 @@ class GeneralEtl(BaseEtl):
         try:
             if self.file.suffix.lower() in {'.csv', '.xlsx'}:
                 self._process_tabular()
-                self.state = ETLState.TRANSFORMED
+                if self.state != ETLState.FAILED:
+                    self.state = ETLState.TRANSFORMED
                 return
 
             md_text = self._read_markdown()
@@ -95,9 +97,12 @@ class GeneralEtl(BaseEtl):
             )
 
             split_docs = self._split_by_headers(text_without_tables)
+            del md_text, text_without_tables  # free large strings before embedding loop
+
             total = len(split_docs)
             logger.info(f"Processing {total} sections from '{self.file.name}'...")
 
+            total_inserted = 0
             for i, doc in enumerate(tqdm(split_docs, desc=f"  {self.file.name}", unit="section", leave=False), 1):
                 cleaned = self._clean_text(doc.page_content)
                 if not cleaned:
@@ -107,8 +112,16 @@ class GeneralEtl(BaseEtl):
                 logger.info(f"[{i}/{total}] {section_metadata.get('header_path', '(no headers)')} ({len(cleaned)} chars)")
 
                 processed = self._process_section(cleaned, section_metadata)
-                self.documents.extend(processed)
+                if processed:
+                    insert_result = self.db_repository.insert(processed)
+                    if not insert_result.success:
+                        logger.error(f"Insert failed for section: {insert_result.message}")
+                        self.state = ETLState.FAILED
+                        return
+                    total_inserted += len(processed)
+                    gc.collect()
 
+            table_docs_batch: List[MyDocument] = []
             for table_doc in table_documents:
                 table_text = table_doc['text']
                 if not table_text:
@@ -121,13 +134,21 @@ class GeneralEtl(BaseEtl):
                 if responses:
                     r = responses[0]
                     sparse_vec = SparseVector(indices=r.sparse.indices, values=r.sparse.values) if r.sparse else None
-                    self.documents.append(MyDocument(
+                    table_docs_batch.append(MyDocument(
                         id=r.uuid,
                         text=table_text,
                         embedding=r.embedding,
                         sparse_embedding=sparse_vec,
                         metadata=table_meta,
                     ))
+
+            if table_docs_batch:
+                insert_result = self.db_repository.insert(table_docs_batch)
+                if not insert_result.success:
+                    logger.error(f"Insert failed for tables: {insert_result.message}")
+                    self.state = ETLState.FAILED
+                    return
+                total_inserted += len(table_docs_batch)
 
             if self.sql_db_repo is not None and table_documents:
                 from collections import defaultdict
@@ -154,8 +175,8 @@ class GeneralEtl(BaseEtl):
                     table_name = f"{self.file.stem}_table{idx}"
                     self.sql_db_repo.register_dataframe(table_name, df)
 
-            print(f"    {len(self.documents)} chunks ready for embedding")
-            logger.info(f"Transform complete: {len(self.documents)} documents from '{self.file.name}'")
+            print(f"    {total_inserted} chunks inserted")
+            logger.info(f"Transform complete: {total_inserted} documents from '{self.file.name}'")
             self.state = ETLState.TRANSFORMED
 
         except FileNotFoundError as e:
@@ -172,13 +193,18 @@ class GeneralEtl(BaseEtl):
             raise FileNotFoundError(f"Converted markdown not found: {md_path}")
         return md_path.read_text(encoding='utf-8')
 
+    _TABULAR_BATCH_SIZE = 500
+
     def _process_tabular(self) -> None:
-        """Process CSV/XLSX as one MyDocument per row.
+        """Process CSV/XLSX as one MyDocument per row, streaming inserts in batches.
 
         Each row is serialised to a pipe-delimited text string and embedded.
         Every column value is stored as a typed metadata key so Qdrant can
         filter on exact values or numeric ranges.  The full text is also stored
         in metadata under the ``text`` key for easy inspection.
+
+        Rows are processed in batches of _TABULAR_BATCH_SIZE to keep memory
+        bounded regardless of file size.
         """
         if self.df is None or self.df.empty:
             logger.error("DataFrame is empty or None — cannot process tabular data.")
@@ -194,61 +220,82 @@ class GeneralEtl(BaseEtl):
             'is_table': False,
         }
 
-        texts: List[str] = []
-        row_metadatas: List[Dict] = []
+        total_rows = len(self.df)
+        total_inserted = 0
 
-        for row_index, row in tqdm(self.df.iterrows(), total=len(self.df), desc=f"  {self.file.name}", unit="row", leave=False):
-            parts: List[str] = []
-            row_meta: Dict = {}
+        with tqdm(total=total_rows, desc=f"  {self.file.name}", unit="row", leave=False) as pbar:
+            for batch_start in range(0, total_rows, self._TABULAR_BATCH_SIZE):
+                batch_df = self.df.iloc[batch_start:batch_start + self._TABULAR_BATCH_SIZE]
 
-            for col in columns:
-                val = row[col]
-                try:
-                    if pd.isna(val):
+                texts: List[str] = []
+                row_metadatas: List[Dict] = []
+
+                for row_index, row in batch_df.iterrows():
+                    parts: List[str] = []
+                    row_meta: Dict = {}
+
+                    for col in columns:
+                        val = row[col]
+                        try:
+                            if pd.isna(val):
+                                continue
+                        except (TypeError, ValueError):
+                            pass
+
+                        parts.append(f"{col}: {val}")
+                        row_meta[col] = self._coerce_value(val)
+
+                    pbar.update(1)
+                    if not parts:
                         continue
-                except (TypeError, ValueError):
-                    pass
 
-                parts.append(f"{col}: {val}")
-                row_meta[col] = self._coerce_value(val)
+                    text = " | ".join(parts)
+                    texts.append(text)
+                    row_metadatas.append({
+                        **row_meta,
+                        **base_metadata,
+                        'row_index': int(row_index),
+                        'text': text,
+                    })
 
-            if not parts:
-                continue
+                if not texts:
+                    continue
 
-            text = " | ".join(parts)
-            texts.append(text)
-            row_metadatas.append({
-                **row_meta,
-                **base_metadata,
-                'row_index': int(row_index),
-                'text': text,
-            })
+                logger.info(f"Embedding batch rows {batch_start}–{batch_start + len(texts) - 1} from '{self.file.name}'...")
+                responses = self.embedding_service.get_embedding_with_uuid(data=texts, chunk_size=32)
 
-        if not texts:
+                if len(responses) != len(texts):
+                    logger.error(
+                        f"Embedding count mismatch: {len(texts)} rows, {len(responses)} responses"
+                    )
+                    self.state = ETLState.FAILED
+                    return
+
+                batch_docs: List[MyDocument] = []
+                for text, meta, r in zip(texts, row_metadatas, responses):
+                    sparse_vec = SparseVector(indices=r.sparse.indices, values=r.sparse.values) if r.sparse else None
+                    batch_docs.append(MyDocument(
+                        id=r.uuid,
+                        text=text,
+                        embedding=r.embedding,
+                        sparse_embedding=sparse_vec,
+                        metadata=meta,
+                    ))
+
+                insert_result = self.db_repository.insert(batch_docs)
+                if not insert_result.success:
+                    logger.error(f"Insert failed for tabular batch: {insert_result.message}")
+                    self.state = ETLState.FAILED
+                    return
+
+                total_inserted += len(batch_docs)
+                gc.collect()
+
+        if total_inserted == 0:
             logger.warning(f"No valid rows found in '{self.file.name}'")
             return
 
-        logger.info(f"Embedding {len(texts)} rows from '{self.file.name}'...")
-        responses = self.embedding_service.get_embedding_with_uuid(data=texts, chunk_size=32)
-
-        if len(responses) != len(texts):
-            logger.error(
-                f"Embedding count mismatch: {len(texts)} rows, {len(responses)} responses"
-            )
-            self.state = ETLState.FAILED
-            return
-
-        for text, meta, r in zip(texts, row_metadatas, responses):
-            sparse_vec = SparseVector(indices=r.sparse.indices, values=r.sparse.values) if r.sparse else None
-            self.documents.append(MyDocument(
-                id=r.uuid,
-                text=text,
-                embedding=r.embedding,
-                sparse_embedding=sparse_vec,
-                metadata=meta,
-            ))
-
-        logger.info(f"Tabular transform complete: {len(self.documents)} documents from '{self.file.name}'")
+        logger.info(f"Tabular transform complete: {total_inserted} documents from '{self.file.name}'")
 
         if self.sql_db_repo is not None:
             suffix = self.file.suffix.lower()

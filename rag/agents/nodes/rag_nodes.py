@@ -235,7 +235,13 @@ class RagNodes:
         query = state['messages'][-1].content
         passages = [{"id": i, "text": doc.text, "meta": doc.metadata} for i, doc in enumerate(docs)]
         reranked = self.reranker.rerank(RerankRequest(query=query, passages=passages))
-        sorted_docs = [docs[r['id']] for r in sorted(reranked, key=lambda x: x['score'], reverse=True)]
+        sorted_docs = []
+        for r in sorted(reranked, key=lambda x: x['score'], reverse=True):
+            doc = docs[r['id']]
+            doc.score = float(r['score'])
+            if doc.metadata is not None:
+                doc.metadata['rerank_score'] = float(r['score'])
+            sorted_docs.append(doc)
 
         return {'filtered_results': sorted_docs, 'search_results': docs}
 
@@ -339,10 +345,14 @@ class RagNodes:
         rerank_request = RerankRequest(query=original_question, passages=passages)
         reranked_results = self.reranker.rerank(rerank_request)
 
-        sorted_docs = [
-            unique_docs[result['id']]
-            for result in sorted(reranked_results, key=lambda x: x['score'], reverse=True)
-        ] 
+        sorted_results = sorted(reranked_results, key=lambda x: x['score'], reverse=True)
+        sorted_docs = []
+        for result in sorted_results:
+            doc = unique_docs[result['id']]
+            doc.score = float(result['score'])
+            if doc.metadata is not None:
+                doc.metadata['rerank_score'] = float(result['score'])
+            sorted_docs.append(doc)
 
         if intent == Intent.RAG_EXHAUSTIVE:
             effective_top_n = self.distiller_top_n * 3

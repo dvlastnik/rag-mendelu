@@ -133,7 +133,7 @@ def _print_result(result: dict):
     print('//////////////////////////////////')
     for index, source in enumerate(result['sources']):
         print(f'--- Source {index}: ---')
-        print(f'Source from file: {source.metadata["source"]}')
+        print(f'Source from file: {source.metadata["source"]}, similarity_score: {source.metadata['score']}, rerank_score: {source.metadata['rerank_score']}')
         print(f' Source Text: {source.text}')
         print(f'-----------------------')
     print('//////////////////////////////////')
@@ -157,6 +157,8 @@ def run_rag_chat(rag: AgenticRAG, json_output: bool = False):
                 break
 
             result = rag.chat(question)
+            print(f"Json output? {json_output}")
+            print(f"Result: {result}")
             if json_output:
                 print(_format_result_json(result))
             else:

@@ -207,6 +207,7 @@ class Utils:
             )
             result = converter.convert(str(path))
             text = result.document.export_to_markdown()
+            del result
             output_path.write_text(text, encoding="utf-8")
             logger.info(f"Converted: {output_path}")
         except Exception as e:

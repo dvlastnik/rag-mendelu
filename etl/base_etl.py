@@ -31,6 +31,8 @@ class BaseEtl(ABC):
         self.state = ETLState.NOT_STARTED
 
     def _insert_by_chunks(self, chunk_size: int = 500) -> ETLState:
+        if not self.documents:
+            return ETLState.LOADED
         logger.info(f"Inserting documents of lenght: {len(self.documents)}, chunk_size = {chunk_size}")
         for i, doc in enumerate(Utils.chunks(self.documents, chunk_size)):
             result = self.db_repository.insert(doc)
