@@ -23,10 +23,10 @@ class DuckDbRepository:
     on tabular data. Works with any column schema — no pre-configuration needed.
     """
 
-    def __init__(self, db_path: str = 'data/sql/tabular.duckdb') -> None:
+    def __init__(self, db_path: str = 'data/sql/tabular.duckdb', read_only: bool = False) -> None:
         pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.db_path = db_path
-        self.conn = duckdb.connect(db_path)
+        self.conn = duckdb.connect(db_path, read_only=read_only)
         logger.info(f"DuckDbRepository connected to {db_path}")
 
     def register_csv(self, source: str, file_path: str) -> None:
