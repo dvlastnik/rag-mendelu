@@ -13,6 +13,7 @@ class NodeName(str, Enum):
     SYNTHESIZER = 'synthesizer_agent'
     SCROLL_RETRIEVER = 'scroll_retriever'
     SCIENTIFIC_RETRIEVER = 'scientific_retriever'
+    SCIENTIFIC_RELEVANCE_GRADER = 'scientific_relevance_grader'
     MULTI_SOURCE_SYNTHESIZER = 'multi_source_synthesizer'
     ERROR = 'error_agent'
 
@@ -21,5 +22,4 @@ class Intent(str, Enum):
     RAG = 'rag'
     RAG_EXHAUSTIVE = 'exhaustive'
     RAG_SUMMARIZATION = 'summarization'
-    SCIENTIFIC = 'scientific'
     MULTI_SOURCE = 'multi_source'

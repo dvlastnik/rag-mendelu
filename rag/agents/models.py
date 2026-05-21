@@ -20,11 +20,21 @@ class MultiQuery(BaseModel):
 class GeneralOrRagDecision(BaseModel):
     intent: Intent = Field(
         ...,
-        description="Query type: 'rag' for specific factual questions, 'exhaustive' for listing/enumeration queries (list all, every, all X mentioned), 'summarization' for summarize/overview requests, 'general' for greetings only."
+        description="Query type: 'rag' for specific factual questions, 'exhaustive' for listing/enumeration queries (list all, every, all X mentioned), 'summarization' for summarize/overview requests, 'general' for greetings only, 'multi_source' when the user explicitly asks to combine documents with climate datasets."
     )
     detected_source: str | None = Field(
         default=None,
         description="The source/dataset name the user is asking about, if identifiable. Must match one of the available sources."
+    )
+
+class ScientificRelevanceDecision(BaseModel):
+    is_relevant: bool = Field(
+        ...,
+        description="True if the scientific results sufficiently answer the user's question."
+    )
+    reasoning: str = Field(
+        ...,
+        description="Brief explanation of why the results are or are not relevant."
     )
 
 class GradeDocuments(BaseModel):

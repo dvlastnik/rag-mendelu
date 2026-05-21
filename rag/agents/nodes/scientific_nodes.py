@@ -2,6 +2,7 @@ from langchain.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from rag.agents.scientific_source import ScientificDataSource
+from rag.agents.models import ScientificRelevanceDecision
 from rag.agents.state import AgentState
 from rag.agents.prompts import Prompts
 from utils.logging_config import get_logger
@@ -51,6 +52,38 @@ class ScientificNodes:
         logger.info(f"Scientific retriever found {len(results)} unique results")
         return {"scientific_results": results}
 
+    def scientific_relevance_grader(self, state: AgentState) -> dict:
+        """
+        LLM evaluation: do the scientific results sufficiently answer the user's question?
+        - If no results returned → immediately fallback to docs.
+        - Otherwise ask LLM to judge relevance.
+        Returns: {"data_source_scope": "scientific_sufficient" | "fallback_to_docs"}
+        """
+        logger.info("--- SCIENTIFIC RELEVANCE GRADER ---")
+        scientific_results = state.get('scientific_results', [])
+
+        if not scientific_results:
+            logger.info("No scientific results — falling back to docs")
+            return {"data_source_scope": "fallback_to_docs"}
+
+        question = next(
+            (m.content for m in reversed(state.get('messages', [])) if isinstance(m, HumanMessage)),
+            ""
+        )
+        results_text = "\n\n".join([
+            f"Source: {r.source_id} | Variable: {r.variable} | Score: {r.score:.3f}\n{r.text}"
+            for r in scientific_results
+        ])
+
+        decision = self.llm.with_structured_output(ScientificRelevanceDecision).invoke([
+            SystemMessage(content=Prompts.get_scientific_relevance_prompt()),
+            HumanMessage(content=f"User question: {question}\n\nScientific results:\n{results_text}"),
+        ])
+
+        logger.info(f"Scientific relevance: is_relevant={decision.is_relevant} — {decision.reasoning}")
+        scope = "scientific_sufficient" if decision.is_relevant else "fallback_to_docs"
+        return {"data_source_scope": scope}
+
     def multi_source_synthesizer(self, state: AgentState) -> dict:
         """
         Merge distilled_facts (from docs RAG path) + scientific_results
@@ -78,12 +111,12 @@ class ScientificNodes:
         else:
             scientific_section = "No scientific dataset results available."
 
-        docs_section = "\n".join(distilled_facts) if distilled_facts else "No document facts available."
+        if distilled_facts:
+            docs_block = f"\n\nDOCUMENT FACTS:\n{chr(10).join(distilled_facts)}"
+        else:
+            docs_block = ""
 
-        user_content = (
-            f"SCIENTIFIC DATASET RESULTS:\n{scientific_section}\n\n"
-            f"DOCUMENT FACTS:\n{docs_section}"
-        )
+        user_content = f"SCIENTIFIC DATASET RESULTS:\n{scientific_section}{docs_block}"
 
         response = self.llm.invoke([
             SystemMessage(content=Prompts.get_multi_source_synthesis_prompt()),

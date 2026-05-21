@@ -102,6 +102,7 @@ def build_graph(
         from rag.agents.nodes.scientific_nodes import ScientificNodes
         scientific_nodes = ScientificNodes(scientific_source=scientific_source, llm=llm)
         builder.add_node(NodeName.SCIENTIFIC_RETRIEVER, scientific_nodes.scientific_retriever)
+        builder.add_node(NodeName.SCIENTIFIC_RELEVANCE_GRADER, scientific_nodes.scientific_relevance_grader)
         builder.add_node(NodeName.MULTI_SOURCE_SYNTHESIZER, scientific_nodes.multi_source_synthesizer)
 
         builder.add_conditional_edges(
@@ -115,12 +116,31 @@ def build_graph(
         )
 
         def _route_after_scientific(state: AgentState):
-            return NodeName.QUERY_PLANNER if state.get('data_source_scope') == 'both' else END
+            if state.get('data_source_scope') == 'both':
+                return NodeName.QUERY_PLANNER
+            return NodeName.SCIENTIFIC_RELEVANCE_GRADER
 
         builder.add_conditional_edges(
             NodeName.SCIENTIFIC_RETRIEVER,
             _route_after_scientific,
-            path_map={NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER, END: END},
+            path_map={
+                NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER,
+                NodeName.SCIENTIFIC_RELEVANCE_GRADER: NodeName.SCIENTIFIC_RELEVANCE_GRADER,
+            },
+        )
+
+        def _route_after_scientific_relevance(state: AgentState):
+            if state.get('data_source_scope') == 'scientific_sufficient':
+                return NodeName.MULTI_SOURCE_SYNTHESIZER
+            return NodeName.QUERY_PLANNER
+
+        builder.add_conditional_edges(
+            NodeName.SCIENTIFIC_RELEVANCE_GRADER,
+            _route_after_scientific_relevance,
+            path_map={
+                NodeName.MULTI_SOURCE_SYNTHESIZER: NodeName.MULTI_SOURCE_SYNTHESIZER,
+                NodeName.QUERY_PLANNER: NodeName.QUERY_PLANNER,
+            },
         )
 
         def _route_hallucination_with_scientific(state: AgentState):

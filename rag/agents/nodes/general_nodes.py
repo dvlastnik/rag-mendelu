@@ -21,10 +21,6 @@ _SUMMARIZATION_PATTERNS = re.compile(
     r'\b(summarize|summarise|summary\s+of|overview\s+of|what\s+is\s+.+\s+about)\b',
     re.IGNORECASE,
 )
-_SCIENTIFIC_PATTERNS = re.compile(
-    r'\b(climate\s+dataset|NetCDF|raster|scientific\s+data|grib|geotiff|variable)\b',
-    re.IGNORECASE,
-)
 
 
 class GeneralNodes:
@@ -63,13 +59,6 @@ class GeneralNodes:
             return Intent.RAG_SUMMARIZATION
         return intent
 
-    def _scientific_intent_upgrade(self, text: str, intent: Intent) -> Intent:
-        """Upgrade intent to SCIENTIFIC when scientific keywords are detected and source is wired."""
-        if self.scientific_source is not None and intent not in (Intent.GENERAL, Intent.MULTI_SOURCE):
-            if _SCIENTIFIC_PATTERNS.search(text):
-                return Intent.SCIENTIFIC
-        return intent
-
     def router_agent(self, state: AgentState):
         logger.info("--- ROUTING ---")
         messages = state['messages']
@@ -91,7 +80,6 @@ class GeneralNodes:
         decision = cast(GeneralOrRagDecision, decision)
 
         intent = self._keyword_intent_upgrade(last_message, decision.intent)
-        intent = self._scientific_intent_upgrade(last_message, intent)
         if intent != decision.intent:
             logger.info(f"Keyword fallback upgraded intent: {decision.intent} -> {intent}")
 
@@ -99,12 +87,7 @@ class GeneralNodes:
         if decision.detected_source and not detected_source:
             logger.warning(f"Source '{decision.detected_source}' not matched in available sources: {self.available_sources}")
 
-        if intent == Intent.MULTI_SOURCE:
-            data_source_scope = "both"
-        elif intent == Intent.SCIENTIFIC:
-            data_source_scope = "scientific"
-        else:
-            data_source_scope = "docs"
+        data_source_scope = "both" if intent == Intent.MULTI_SOURCE else "docs"
 
         logger.info(f"Router decision: intent={intent}, detected_source={detected_source}, scope={data_source_scope}")
         return {
@@ -130,8 +113,7 @@ class GeneralNodes:
 
     def route_intent_with_scientific(self, state: AgentState):
         intent = state['intent']
-        if intent in (Intent.SCIENTIFIC, Intent.MULTI_SOURCE):
-            return NodeName.SCIENTIFIC_RETRIEVER
-        if intent in (Intent.RAG, Intent.RAG_EXHAUSTIVE, Intent.RAG_SUMMARIZATION):
-            return NodeName.QUERY_PLANNER
-        return NodeName.GENERAL
+        if intent == Intent.GENERAL:
+            return NodeName.GENERAL
+        # All RAG intents (and MULTI_SOURCE) search scientific data first
+        return NodeName.SCIENTIFIC_RETRIEVER
